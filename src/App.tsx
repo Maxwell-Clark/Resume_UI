@@ -28,9 +28,11 @@ interface JobData {
 }
 
 interface StorageInfo {
-  url: string
+  signed_url: string
   path: string
   bucket: string
+  content_type?: string
+  size_bytes?: number
 }
 
 interface TailorResponse {
@@ -132,12 +134,31 @@ function App() {
     setError(null)
     
     try {
+      console.log('Downloading from URL:', url)
       const response = await fetch(url)
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch file: ${response.statusText}`)
+        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`)
+      }
+      
+      // Check if the response is actually a file or HTML
+      const contentType = response.headers.get('content-type')
+      console.log('Content-Type:', contentType)
+      
+      if (contentType && contentType.includes('text/html')) {
+        // If it's HTML, it's likely an error page or login page
+        const htmlText = await response.text()
+        console.error('Received HTML instead of file:', htmlText.substring(0, 200))
+        throw new Error('The download URL returned an HTML page instead of a file. This usually means the file is not accessible or requires authentication.')
       }
       
       const blob = await response.blob()
+      console.log('Blob size:', blob.size, 'bytes')
+      
+      if (blob.size === 0) {
+        throw new Error('The downloaded file is empty')
+      }
+      
       const downloadUrl = window.URL.createObjectURL(blob)
       
       const link = document.createElement('a')
@@ -149,6 +170,8 @@ function App() {
       
       // Clean up the blob URL
       window.URL.revokeObjectURL(downloadUrl)
+      
+      console.log('Download completed successfully')
     } catch (error) {
       console.error('Download failed:', error)
       setError(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -409,7 +432,7 @@ function App() {
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => downloadFile(
-                      tailoredResult.storage.url, 
+                      tailoredResult.storage.signed_url, 
                       `tailored_resume.${tailoredResult.format}`
                     )}
                     disabled={isDownloading}
@@ -428,9 +451,24 @@ function App() {
                     )}
                   </button>
                   
+                  <a
+                    href={tailoredResult.storage.signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                  >
+                    🔗 Test URL
+                  </a>
+                  
                   <div className="text-sm text-slate-600">
                     <p>Format: {tailoredResult.format}</p>
                     <p>Bucket: {tailoredResult.storage.bucket}</p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">Debug: Storage URL</summary>
+                      <p className="mt-1 text-xs break-all bg-gray-100 p-2 rounded">
+                        {tailoredResult.storage.signed_url}
+                      </p>
+                    </details>
                   </div>
                 </div>
               </div>
