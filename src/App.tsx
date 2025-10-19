@@ -6,7 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Upload, FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
-const API_BASE_URL = 'http://0.0.0.0:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+
+// Log the API URL being used (for debugging)
+console.log('API Base URL:', API_BASE_URL)
 
 interface ParsedResume {
   person: any
@@ -45,6 +48,7 @@ function App() {
   
   // Processing states
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null)
   const [parsedJob, setParsedJob] = useState<JobData | null>(null)
   const [tailoredResult, setTailoredResult] = useState<TailorResponse | null>(null)
@@ -121,6 +125,36 @@ function App() {
     }
 
     return await response.json()
+  }
+
+  const downloadFile = async (url: string, filename: string) => {
+    setIsDownloading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`)
+      }
+      
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(downloadUrl)
+    } catch (error) {
+      console.error('Download failed:', error)
+      setError(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   const handleSubmit = async () => {
@@ -353,7 +387,8 @@ function App() {
             </div>
           )}
 
-          {/* Download Section */}
+          {/* 
+           Section */}
           {tailoredResult && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -372,15 +407,26 @@ function App() {
                 </div>
                 
                 <div className="flex items-center gap-4">
-                  <a
-                    href={tailoredResult.storage.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  <button
+                    onClick={() => downloadFile(
+                      tailoredResult.storage.url, 
+                      `tailored_resume.${tailoredResult.format}`
+                    )}
+                    disabled={isDownloading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="h-4 w-4" />
-                    Download {tailoredResult.format.toUpperCase()} Resume
-                  </a>
+                    {isDownloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Download {tailoredResult.format.toUpperCase()} Resume
+                      </>
+                    )}
+                  </button>
                   
                   <div className="text-sm text-slate-600">
                     <p>Format: {tailoredResult.format}</p>
