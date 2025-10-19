@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Upload, FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://airesume-1-nfe7.onrender.com'
 
 // Log the API URL being used (for debugging)
 console.log('API Base URL:', API_BASE_URL)
