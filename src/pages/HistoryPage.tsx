@@ -60,11 +60,9 @@ const editableStatuses: EditableStatus[] = ['tailored', 'applied', 'interviewing
 
 const StatusBadge = ({ 
   status, 
-  itemId, 
   onStatusChange 
 }: { 
   status: HistoryItem['status']
-  itemId: string
   onStatusChange: (newStatus: EditableStatus) => Promise<void>
 }) => {
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -157,7 +155,6 @@ const StatusBadge = ({
 export function HistoryPage() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [updatingStatus, setUpdatingStatus] = useState<Set<string>>(new Set())
   const location = useLocation()
 
   useEffect(() => {
@@ -184,7 +181,6 @@ export function HistoryPage() {
   }, [location.pathname])
 
   const handleStatusChange = async (itemId: string, newStatus: EditableStatus) => {
-    setUpdatingStatus(prev => new Set(prev).add(itemId))
     try {
       const currentItem = historyItems.find(item => item.id === itemId)
       const currentStatusDates = currentItem?.status_dates || {}
@@ -211,12 +207,6 @@ export function HistoryPage() {
     } catch (error) {
       console.error('Failed to update status:', error)
       // Optionally show an error toast here
-    } finally {
-      setUpdatingStatus(prev => {
-        const next = new Set(prev)
-        next.delete(itemId)
-        return next
-      })
     }
   }
 
