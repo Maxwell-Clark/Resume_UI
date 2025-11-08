@@ -279,7 +279,6 @@ export function HistoryPage() {
                       </h3>
                       <StatusBadge 
                         status={item.status} 
-                        itemId={item.id}
                         onStatusChange={(newStatus) => handleStatusChange(item.id, newStatus)}
                       />
                     </div>
