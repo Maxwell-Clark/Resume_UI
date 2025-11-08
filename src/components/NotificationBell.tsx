@@ -3,13 +3,37 @@ import { useState } from 'react'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { formatDistanceToNow } from 'date-fns'
+
+function formatRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  
+  if (diffInSeconds < 60) {
+    return 'just now'
+  }
+  
+  const diffInMinutes = Math.floor(diffInSeconds / 60)
+  if (diffInMinutes < 60) {
+    return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`
+  }
+  
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) {
+    return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
+  }
+  
+  const diffInDays = Math.floor(diffInHours / 24)
+  if (diffInDays < 7) {
+    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
+  }
+  
+  const diffInWeeks = Math.floor(diffInDays / 7)
+  return `${diffInWeeks} week${diffInWeeks > 1 ? 's' : ''} ago`
+}
 
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
-
-  const unreadNotifications = notifications.filter((n) => !n.read)
 
   return (
     <div className="relative">
@@ -74,7 +98,7 @@ export function NotificationBell() {
                             </p>
                           )}
                           <p className="text-xs text-muted-foreground mt-1">
-                            {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
+                            {formatRelativeTime(notification.timestamp)}
                           </p>
                         </div>
                         <div className="flex items-center gap-1">

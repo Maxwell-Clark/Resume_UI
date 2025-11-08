@@ -133,16 +133,6 @@ export async function updateHistoryItem(id: string, updates: Partial<Pick<Histor
   }
 }
 
-function getHistoryItemsFromLocalStorage(): HistoryItem[] {
-  try {
-    const stored = localStorage.getItem(HISTORY_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
-  } catch (error) {
-    console.error('Error reading history from localStorage:', error)
-    return []
-  }
-}
-
 export function clearHistory(): void {
   localStorage.removeItem(HISTORY_STORAGE_KEY)
 }

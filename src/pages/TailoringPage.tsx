@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Upload, FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { Popover } from "@/components/ui/popover"
-import { saveHistoryItem, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { saveHistoryItem, updateHistoryItem } from '@/lib/history'
 import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { useNavigate } from 'react-router-dom'
 
@@ -64,6 +64,7 @@ export function TailoringPage() {
         url: completedItem.download_url || '',
         signed_url: completedItem.download_url || '',
         bucket: 'resumes',
+        path: '',
       },
       format: 'pdf',
     })

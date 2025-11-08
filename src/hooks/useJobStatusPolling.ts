@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getHistoryItemById, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { getHistoryItemById, type HistoryItem } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
 
 export function useJobStatusPolling(historyId: string | null, onComplete: (item: HistoryItem) => void) {
