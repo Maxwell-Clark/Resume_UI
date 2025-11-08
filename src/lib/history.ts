@@ -1,5 +1,7 @@
 const API_BASE_URL = 'http://0.0.0.0:8000'
 
+export type StatusType = 'tailoring' | 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired' | 'complete' | 'failed'
+
 export interface HistoryItem {
   id: string
   file_name: string
@@ -7,7 +9,8 @@ export interface HistoryItem {
   company: string
   download_url?: string
   original_resume_name?: string
-  status: 'tailoring' | 'complete' | 'failed'
+  status: StatusType
+  status_dates?: Partial<Record<StatusType, string>>
   created_at: string
 }
 
@@ -43,6 +46,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       download_url: data.download_url,
       original_resume_name: data.original_resume_name,
       status: data.status || 'tailoring',
+      status_dates: data.status_dates || {},
       created_at: data.created_at,
     }
   } catch (error) {
@@ -68,6 +72,7 @@ export async function getHistoryItems(): Promise<HistoryItem[]> {
       download_url: item.download_url,
       original_resume_name: item.original_resume_name,
       status: item.status || 'tailoring',
+      status_dates: item.status_dates || {},
       created_at: item.created_at,
     }))
   } catch (error) {
@@ -94,6 +99,7 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       download_url: item.download_url,
       original_resume_name: item.original_resume_name,
       status: item.status || 'tailoring',
+      status_dates: item.status_dates || {},
       created_at: item.created_at,
     }
   } catch (error) {
@@ -102,7 +108,10 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
   }
 }
 
-export async function updateHistoryItem(id: string, updates: Partial<Pick<HistoryItem, 'download_url' | 'status'>>): Promise<HistoryItem> {
+export async function updateHistoryItem(
+  id: string, 
+  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates'>>
+): Promise<HistoryItem> {
   try {
     const response = await fetch(`${API_BASE_URL}/history/${id}`, {
       method: 'PATCH',
@@ -125,6 +134,7 @@ export async function updateHistoryItem(id: string, updates: Partial<Pick<Histor
       download_url: item.download_url,
       original_resume_name: item.original_resume_name,
       status: item.status || 'tailoring',
+      status_dates: item.status_dates || {},
       created_at: item.created_at,
     }
   } catch (error) {
