@@ -10,7 +10,7 @@ import { saveHistoryItem, updateHistoryItem } from '@/lib/history'
 import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { useNavigate } from 'react-router-dom'
 
-const API_BASE_URL = 'http://0.0.0.0:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 interface ParsedResume {
   person: any
