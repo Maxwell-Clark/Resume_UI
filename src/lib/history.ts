@@ -5,12 +5,13 @@ export interface HistoryItem {
   file_name: string
   job_title: string
   company: string
-  download_url: string
+  download_url?: string
   original_resume_name?: string
+  status: 'tailoring' | 'complete' | 'failed'
   created_at: string
 }
 
-export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<void> {
+export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
   try {
     const response = await fetch(`${API_BASE_URL}/history`, {
       method: 'POST',
@@ -21,8 +22,9 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
         file_name: item.file_name,
         job_title: item.job_title,
         company: item.company,
-        download_url: item.download_url,
+        download_url: item.download_url || null,
         original_resume_name: item.original_resume_name || null,
+        status: item.status || 'tailoring',
       }),
     })
 
@@ -31,18 +33,21 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       console.error('History API error response:', errorText)
       throw new Error(`Failed to save history: ${response.status} ${response.statusText} - ${errorText}`)
     }
+
+    const data = await response.json()
+    return {
+      id: data.id.toString(),
+      file_name: data.file_name,
+      job_title: data.job_title,
+      company: data.company,
+      download_url: data.download_url,
+      original_resume_name: data.original_resume_name,
+      status: data.status || 'tailoring',
+      created_at: data.created_at,
+    }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
-    // Fallback to localStorage if API fails
-    const history = getHistoryItemsFromLocalStorage()
-    const newItem: HistoryItem = {
-      ...item,
-      id: Date.now().toString(),
-      created_at: new Date().toISOString()
-    }
-    history.unshift(newItem)
-    const limitedHistory = history.slice(0, 50)
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(limitedHistory))
+    throw error
   }
 }
 
@@ -57,17 +62,74 @@ export async function getHistoryItems(): Promise<HistoryItem[]> {
     const data = await response.json()
     return data.map((item: any) => ({
       id: item.id.toString(),
-      filename: item.filename,
+      file_name: item.file_name,
       job_title: item.job_title,
       company: item.company,
       download_url: item.download_url,
       original_resume_name: item.original_resume_name,
+      status: item.status || 'tailoring',
       created_at: item.created_at,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
-    // Fallback to localStorage if API fails
-    return getHistoryItemsFromLocalStorage()
+    return []
+  }
+}
+
+export async function getHistoryItemById(id: string): Promise<HistoryItem | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/history/${id}`)
+    
+    if (!response.ok) {
+      if (response.status === 404) return null
+      throw new Error(`Failed to fetch history: ${response.statusText}`)
+    }
+
+    const item = await response.json()
+    return {
+      id: item.id.toString(),
+      file_name: item.file_name,
+      job_title: item.job_title,
+      company: item.company,
+      download_url: item.download_url,
+      original_resume_name: item.original_resume_name,
+      status: item.status || 'tailoring',
+      created_at: item.created_at,
+    }
+  } catch (error) {
+    console.error('Error fetching history item:', error)
+    return null
+  }
+}
+
+export async function updateHistoryItem(id: string, updates: Partial<Pick<HistoryItem, 'download_url' | 'status'>>): Promise<HistoryItem> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to update history: ${response.statusText}`)
+    }
+
+    const item = await response.json()
+    return {
+      id: item.id.toString(),
+      file_name: item.file_name,
+      job_title: item.job_title,
+      company: item.company,
+      download_url: item.download_url,
+      original_resume_name: item.original_resume_name,
+      status: item.status || 'tailoring',
+      created_at: item.created_at,
+    }
+  } catch (error) {
+    console.error('Error updating history item:', error)
+    throw error
   }
 }
 

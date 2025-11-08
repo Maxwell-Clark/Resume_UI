@@ -6,7 +6,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Upload, FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { Popover } from "@/components/ui/popover"
-import { saveHistoryItem } from '@/lib/history'
+import { saveHistoryItem, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
+import { useNavigate } from 'react-router-dom'
 
 const API_BASE_URL = 'http://0.0.0.0:8000'
 
@@ -27,7 +29,8 @@ interface JobData {
 }
 
 interface StorageInfo {
-  url: string
+  url?: string
+  signed_url?: string
   path: string
   bucket: string
 }
@@ -51,6 +54,20 @@ export function TailoringPage() {
   const [tailoredResult, setTailoredResult] = useState<TailorResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filename, setFileName] = useState<string>('Tailored_Resume')
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  // Poll for job status when historyId is set
+  useJobStatusPolling(currentHistoryId, (completedItem) => {
+    setTailoredResult({
+      storage: {
+        url: completedItem.download_url || '',
+        signed_url: completedItem.download_url || '',
+        bucket: 'resumes',
+      },
+      format: 'pdf',
+    })
+  })
 
   const defaultPrompt = "Please analyze this resume and job description to provide tailored feedback and suggestions for improvement."
 
@@ -140,36 +157,61 @@ export function TailoringPage() {
     setTailoredResult(null)
 
     try {
-      // Step 1: Parse resume
-      console.log('Parsing resume...')
-      const resume = await parseResume(resumeFile)
-      setParsedResume(resume)
-      console.log('Resume parsed:', resume)
-
-      // Step 2: Parse job description
+      // Step 1: Parse job description first to get job info
       console.log('Parsing job description...')
       const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
       setParsedJob(job)
       console.log('Job parsed:', job)
 
-      // Step 3: Tailor resume
-      console.log('Tailoring resume...')
-      const result = await tailorResume(resume, job, filename)
-      setTailoredResult(result)
-      console.log('Resume tailored:', result)
-
-      // Step 4: Save to history
-      await saveHistoryItem({
+      // Step 2: Create history entry immediately with "tailoring" status
+      console.log('Creating history entry...')
+      const historyItem = await saveHistoryItem({
         file_name: filename || 'Tailored_Resume',
         job_title: job.title || 'Unknown Position',
         company: job.company || 'Unknown Company',
+        original_resume_name: resumeFile.name,
+        status: 'tailoring',
+      })
+      setCurrentHistoryId(historyItem.id)
+      console.log('History entry created:', historyItem)
+
+      // Step 3: Navigate to history page immediately
+      navigate('/history')
+
+      // Step 4: Continue processing in background
+      // Parse resume
+      console.log('Parsing resume...')
+      const resume = await parseResume(resumeFile)
+      setParsedResume(resume)
+      console.log('Resume parsed:', resume)
+
+      // Tailor resume
+      console.log('Tailoring resume...')
+      const result = await tailorResume(resume, job, filename)
+      console.log('Resume tailored:', result)
+
+      // Update history entry with download URL and status
+      await updateHistoryItem(historyItem.id, {
         download_url: result.storage.signed_url || result.storage.url,
-        original_resume_name: resumeFile.name
+        status: 'complete',
       })
 
+      setCurrentHistoryId(null) // Stop polling
     } catch (err) {
       console.error('Processing failed:', err)
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      
+      // Update history entry status to failed if we have a history ID
+      if (currentHistoryId) {
+        try {
+          await updateHistoryItem(currentHistoryId, {
+            status: 'failed',
+          })
+        } catch (updateError) {
+          console.error('Failed to update history status:', updateError)
+        }
+        setCurrentHistoryId(null)
+      }
     } finally {
       setIsProcessing(false)
     }

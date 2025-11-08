@@ -3,6 +3,7 @@ import { NavbarPreset } from "@/components/ui/navbar"
 import { Sidebar } from "@/components/ui/sidebar"
 import { Link, useLocation } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { NotificationBell } from '@/components/NotificationBell'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -17,7 +18,12 @@ export function Layout({ children }: LayoutProps) {
       <NavbarPreset
         brand={<span>AAA Resume</span>}
         onSidebarToggle={() => setSideBarOpen(true)}
-        right={<ThemeToggle />}
+        right={
+          <>
+            <NotificationBell />
+            <ThemeToggle />
+          </>
+        }
       />
       <Sidebar
         open={sideBarOpen}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, Mail, Key, Bell, Shield } from 'lucide-react'
+import { User, Bell, Shield } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
