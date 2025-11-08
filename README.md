@@ -1,4 +1,26 @@
-# React + TypeScript + Vite
+# Resume Analyzer UI
+
+A React + TypeScript + Vite application for analyzing and tailoring resumes using AI.
+
+## Features
+
+- Upload PDF resumes for parsing
+- Input job descriptions (URL or text)
+- AI-powered resume tailoring
+- Download tailored resumes from Supabase storage
+
+## Environment Variables
+
+Create a `.env` file in the root directory to configure the API endpoint:
+
+```bash
+# API Configuration
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+If not set, defaults to `http://localhost:8000`.
+
+## Development
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
