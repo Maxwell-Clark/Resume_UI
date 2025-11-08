@@ -178,16 +178,16 @@ export function TailoringPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-slate-900 mb-2">Tailor Your Resume</h1>
-        <p className="text-slate-600">Upload your resume and job description to Tailor your Resume to exactly what the job description requires</p>
+        <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Tailor Your Resume</h1>
+        <p className="text-slate-600 dark:text-slate-400">Upload your resume and job description to Tailor your Resume to exactly what the job description requires</p>
       </div>
 
       <div className="space-y-8">
         {/* Resume Upload Section */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <FileText className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-slate-900">Resume Upload</h2>
+            <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Upload</h2>
           </div>
           <div className="space-y-4">
             <Label htmlFor="resume-upload" className="text-sm font-medium text-slate-700">
@@ -209,15 +209,15 @@ export function TailoringPage() {
           </div>
         </div>
 
-        {/* Job Description Section */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
+          {/* Job Description Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
             {isJobDescriptionLink ? (
-              <Link className="h-5 w-5 text-green-600" />
+              <Link className="h-5 w-5 text-green-600 dark:text-green-400" />
             ) : (
-              <Type className="h-5 w-5 text-green-600" />
+              <Type className="h-5 w-5 text-green-600 dark:text-green-400" />
             )}
-            <h2 className="text-xl font-semibold text-slate-900">Job Description</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Job Description</h2>
           </div>
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
@@ -226,14 +226,14 @@ export function TailoringPage() {
                 checked={isJobDescriptionLink}
                 onCheckedChange={(checked) => setIsJobDescriptionLink(checked as boolean)}
               />
-              <Label htmlFor="job-link-toggle" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="job-link-toggle" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Job description is a link
               </Label>
             </div>
             
             {isJobDescriptionLink ? (
               <div className="space-y-2">
-                <Label htmlFor="job-link" className="text-sm font-medium text-slate-700">
+                <Label htmlFor="job-link" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Job posting URL
                 </Label>
                 <Input
@@ -247,7 +247,7 @@ export function TailoringPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="job-description" className="text-sm font-medium text-slate-700">
+                <Label htmlFor="job-description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Job description text
                 </Label>
                 <Textarea
@@ -270,10 +270,10 @@ export function TailoringPage() {
           contentClassName="p-0 rounded-xl overflow-hidden border bg-background"
         >
           <div className="w-[50rem] max-w-[200vw]">
-            <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Type className="h-5 w-5 text-purple-600" />
-                <h2 className="text-xl font-semibold text-slate-900">Analysis Prompt</h2>
+                <Type className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Analysis Prompt</h2>
               </div>
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
@@ -282,18 +282,18 @@ export function TailoringPage() {
                     checked={useDefaultPrompt}
                     onCheckedChange={(checked) => setUseDefaultPrompt(checked as boolean)}
                   />
-                  <Label htmlFor="default-prompt" className="text-sm font-medium text-slate-700">
+                  <Label htmlFor="default-prompt" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     Use default prompt
                   </Label>
                 </div>
                 
                 {useDefaultPrompt ? (
-                  <div className="p-4 bg-slate-50 rounded-md">
-                    <p className="text-sm text-slate-600 italic">"{defaultPrompt}"</p>
+                  <div className="p-4 bg-slate-50 dark:bg-slate-700 rounded-md">
+                    <p className="text-sm text-slate-600 dark:text-slate-300 italic">"{defaultPrompt}"</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Label htmlFor="custom-prompt" className="text-sm font-medium text-slate-700">
+                    <Label htmlFor="custom-prompt" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                       Custom prompt
                     </Label>
                     <Textarea
@@ -308,12 +308,12 @@ export function TailoringPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Type className="h-5 w-5 text-purple-600"/>
-                <h2 className="text-xl font-semibold text-slate-900"> Tailered Resume File Name</h2>
+                <Type className="h-5 w-5 text-purple-600 dark:text-purple-400"/>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100"> Tailered Resume File Name</h2>
               </div>
-              <Label htmlFor="filename" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="filename" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Output File Name (Optional)
               </Label>
               <Input 
@@ -366,12 +366,12 @@ export function TailoringPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Type className="h-5 w-5 text-purple-600"/>
-            <h2 className="text-xl font-semibold text-slate-900"> Tailered Resume File Name</h2>
+            <Type className="h-5 w-5 text-purple-600 dark:text-purple-400"/>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100"> Tailered Resume File Name</h2>
           </div>
-          <Label htmlFor="filename" className="text-sm font-medium text-slate-700">
+          <Label htmlFor="filename" className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Output File Name (Optional)
           </Label>
           <Input 
@@ -402,14 +402,14 @@ export function TailoringPage() {
           </Button>
         </div>
 
-        {/* Error Display */}
+          {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <span className="text-red-800 font-medium">Error</span>
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <span className="text-red-800 dark:text-red-300 font-medium">Error</span>
             </div>
-            <p className="text-red-700 mt-1">{error}</p>
+            <p className="text-red-700 dark:text-red-400 mt-1">{error}</p>
           </div>
         )}
 
@@ -434,8 +434,8 @@ export function TailoringPage() {
               </div>
               
               <div>
-                <h3 className="font-medium text-slate-900 mb-2">Parsed Job</h3>
-                <div className="text-sm text-slate-600 space-y-1">
+                <h3 className="font-medium text-slate-900 dark:text-slate-100 mb-2">Parsed Job</h3>
+                <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
                   <p><strong>Title:</strong> {parsedJob.title || 'N/A'}</p>
                   <p><strong>Company:</strong> {parsedJob.company || 'N/A'}</p>
                   <p><strong>Requirements:</strong> {parsedJob.requirements?.length || 0} items</p>

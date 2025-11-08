@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavbarPreset } from "@/components/ui/navbar"
 import { Sidebar } from "@/components/ui/sidebar"
 import { Link, useLocation } from 'react-router-dom'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -12,10 +13,11 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <NavbarPreset
         brand={<span>AAA Resume</span>}
         onSidebarToggle={() => setSideBarOpen(true)}
+        right={<ThemeToggle />}
       />
       <Sidebar
         open={sideBarOpen}

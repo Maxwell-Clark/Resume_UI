@@ -17,20 +17,20 @@ export function AccountSettingsPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-slate-900 mb-2">Account Settings</h1>
-        <p className="text-slate-600">Manage your account preferences and information</p>
+        <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Account Settings</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage your account preferences and information</p>
       </div>
 
       <div className="space-y-6">
         {/* Profile Information */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-6">
-            <User className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-slate-900">Profile Information</h2>
+            <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Profile Information</h2>
           </div>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Full Name
               </Label>
               <Input
@@ -42,7 +42,7 @@ export function AccountSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Email Address
               </Label>
               <Input
@@ -77,7 +77,7 @@ export function AccountSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-password" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="new-password" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 New Password
               </Label>
               <Input
@@ -87,7 +87,7 @@ export function AccountSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm-password" className="text-sm font-medium text-slate-700">
+              <Label htmlFor="confirm-password" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Confirm New Password
               </Label>
               <Input
@@ -124,10 +124,10 @@ export function AccountSettingsPage() {
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="email-notifications" className="text-sm font-medium text-slate-700">
+                <Label htmlFor="email-notifications" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Email Notifications
                 </Label>
-                <p className="text-sm text-slate-500">Receive email updates when your resume is ready</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Receive email updates when your resume is ready</p>
               </div>
               <Checkbox
                 id="email-notifications"

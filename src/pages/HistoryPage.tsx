@@ -39,39 +39,39 @@ export function HistoryPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-slate-900 mb-2">Resume History</h1>
-        <p className="text-slate-600">View and download your previously tailored resumes</p>
+        <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume History</h1>
+        <p className="text-slate-600 dark:text-slate-400">View and download your previously tailored resumes</p>
       </div>
 
       <div className="space-y-4">
         {isLoading ? (
-          <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-            <History className="h-16 w-16 text-slate-400 mx-auto mb-4 animate-pulse" />
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">Loading History...</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
+            <History className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4 animate-pulse" />
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Loading History...</h3>
           </div>
         ) : historyItems.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-            <History className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No History Yet</h3>
-            <p className="text-slate-600">Your tailored resumes will appear here once you create them.</p>
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
+            <History className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No History Yet</h3>
+            <p className="text-slate-600 dark:text-slate-400">Your tailored resumes will appear here once you create them.</p>
           </div>
         ) : (
           historyItems.map((item) => (
-            <div key={item.id} className="bg-white rounded-lg shadow-sm border p-6">
+            <div key={item.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <FileText className="h-6 w-6 text-blue-600" />
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-1">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
                       {item.file_name}
                     </h3>
-                    <div className="space-y-1 text-sm text-slate-600">
+                    <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
                       <p><strong>Job Title:</strong> {item.job_title}</p>
                       <p><strong>Company:</strong> {item.company}</p>
                       {item.original_resume_name && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           <strong>Original:</strong> {item.original_resume_name}
                         </p>
                       )}
