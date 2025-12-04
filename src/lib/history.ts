@@ -1,3 +1,5 @@
+import { authenticatedFetch, handleApiResponse } from './auth'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export type StatusType = 'tailoring' | 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired' | 'complete' | 'failed'
@@ -16,7 +18,7 @@ export interface HistoryItem {
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
   try {
-    const response = await fetch(`${API_BASE_URL}/history`, {
+    const response = await authenticatedFetch('/history', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,13 +33,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       }),
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('History API error response:', errorText)
-      throw new Error(`Failed to save history: ${response.status} ${response.statusText} - ${errorText}`)
-    }
-
-    const data = await response.json()
+    const data = await handleApiResponse<HistoryItem>(response)
     return {
       id: data.id.toString(),
       file_name: data.file_name,
@@ -57,13 +53,9 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
 
 export async function getHistoryItems(): Promise<HistoryItem[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/history?limit=50`)
+    const response = await authenticatedFetch('/history?limit=50')
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch history: ${response.statusText}`)
-    }
-
-    const data = await response.json()
+    const data = await handleApiResponse<HistoryItem[]>(response)
     return data.map((item: any) => ({
       id: item.id.toString(),
       file_name: item.file_name,
@@ -83,14 +75,11 @@ export async function getHistoryItems(): Promise<HistoryItem[]> {
 
 export async function getHistoryItemById(id: string): Promise<HistoryItem | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${id}`)
+    const response = await authenticatedFetch(`/history/${id}`)
     
-    if (!response.ok) {
-      if (response.status === 404) return null
-      throw new Error(`Failed to fetch history: ${response.statusText}`)
-    }
-
-    const item = await response.json()
+    if (response.status === 404) return null
+    
+    const item = await handleApiResponse<HistoryItem>(response)
     return {
       id: item.id.toString(),
       file_name: item.file_name,
@@ -113,7 +102,7 @@ export async function updateHistoryItem(
   updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates'>>
 ): Promise<HistoryItem> {
   try {
-    const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+    const response = await authenticatedFetch(`/history/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -121,11 +110,7 @@ export async function updateHistoryItem(
       body: JSON.stringify(updates),
     })
 
-    if (!response.ok) {
-      throw new Error(`Failed to update history: ${response.statusText}`)
-    }
-
-    const item = await response.json()
+    const item = await handleApiResponse<HistoryItem>(response)
     return {
       id: item.id.toString(),
       file_name: item.file_name,

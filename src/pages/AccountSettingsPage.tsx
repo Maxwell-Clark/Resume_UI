@@ -1,18 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { User, Bell, Shield } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 export function AccountSettingsPage() {
-  // TODO: Fetch user data from API and handle form submission
+  const { user } = useAuth()
   const [formData, setFormData] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
+    name: '',
+    email: '',
     notifications: true,
     emailNotifications: true
   })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+        email: user.email || '',
+        notifications: true,
+        emailNotifications: true
+      })
+      setLoading(false)
+    }
+  }, [user])
 
   return (
     <div className="mx-auto max-w-4xl">
