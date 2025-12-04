@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { PublicLayout } from '@/components/PublicLayout'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'

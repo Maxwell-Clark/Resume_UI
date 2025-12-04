@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
 
 export function AccountSettingsPage() {
   const { user } = useAuth()
@@ -15,7 +14,6 @@ export function AccountSettingsPage() {
     notifications: true,
     emailNotifications: true
   })
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (user) {
@@ -25,7 +23,6 @@ export function AccountSettingsPage() {
         notifications: true,
         emailNotifications: true
       })
-      setLoading(false)
     }
   }, [user])
 

@@ -6,7 +6,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationBell } from '@/components/NotificationBell'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { User, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode

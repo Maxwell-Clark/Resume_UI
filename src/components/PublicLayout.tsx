@@ -1,4 +1,4 @@
-import { Navbar, NavbarBrand, NavbarNav, NavbarItem, NavbarLink, NavbarActions, NavbarSpacer, NavbarMenuButton } from "@/components/ui/navbar"
+import { Navbar, NavbarBrand, NavbarNav, NavbarItem, NavbarActions, NavbarSpacer, NavbarMenuButton } from "@/components/ui/navbar"
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
