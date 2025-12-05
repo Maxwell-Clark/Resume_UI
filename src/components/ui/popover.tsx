@@ -65,7 +65,7 @@ export function Popover({
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const triggerRef = React.useRef<HTMLElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
   // Close on Escape
@@ -153,6 +153,7 @@ export function Popover({
       return (
         <button
           {...triggerProps}
+          ref={triggerRef as React.RefObject<HTMLButtonElement>}
           type="button"
         >
           {trigger}
@@ -160,7 +161,7 @@ export function Popover({
       );
     } else {
       return (
-        <div {...triggerProps}>
+        <div {...triggerProps} ref={triggerRef as React.RefObject<HTMLDivElement>}>
           {trigger}
         </div>
       );
@@ -203,7 +204,7 @@ export function Popover({
   return (
     <>
       <TriggerWrapper
-        ref={triggerRef}
+        ref={triggerRef as any}
         {...triggerWrapperProps}
         data-slot="popover-trigger"
         aria-haspopup="dialog"
