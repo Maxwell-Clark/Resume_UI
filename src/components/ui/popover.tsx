@@ -29,6 +29,10 @@ export type PopoverProps = {
   closeOnEsc?: boolean;
   /** Mount container for the portal */
   container?: Element | null;
+  /** Whether to wrap trigger in a button (default: true). Set to false to use a div wrapper. */
+  wrapInButton?: boolean;
+  /** Custom className for the trigger wrapper */
+  triggerClassName?: string;
 };
 
 /**
@@ -50,6 +54,8 @@ export function Popover({
   closeOnOutsideClick = true,
   closeOnEsc = true,
   container,
+  wrapInButton = true,
+  triggerClassName,
 }: PopoverProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
   const isControlled = openProp !== undefined;
@@ -129,19 +135,37 @@ export function Popover({
     };
   }, [open, position]);
 
-  if (!mounted) return (
-    <button
-      ref={triggerRef as any}
-      type="button"
-      data-slot="popover-trigger"
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      className="inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      onClick={() => setOpen(!open)}
-    >
-      {trigger}
-    </button>
-  );
+  const triggerProps = {
+    ref: triggerRef as any,
+    "data-slot": "popover-trigger",
+    "aria-haspopup": "dialog" as const,
+    "aria-expanded": open,
+    onClick: () => setOpen(!open),
+    className: triggerClassName || (wrapInButton 
+      ? "inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      : "cursor-pointer"),
+    role: wrapInButton ? undefined : "button",
+    tabIndex: wrapInButton ? undefined : 0,
+  };
+
+  if (!mounted) {
+    if (wrapInButton) {
+      return (
+        <button
+          {...triggerProps}
+          type="button"
+        >
+          {trigger}
+        </button>
+      );
+    } else {
+      return (
+        <div {...triggerProps}>
+          {trigger}
+        </div>
+      );
+    }
+  }
 
   const content = open ? (
     <div data-slot="popover-root">
@@ -171,19 +195,32 @@ export function Popover({
     </div>
   ) : null;
 
+  const TriggerWrapper = wrapInButton ? 'button' : 'div';
+  const triggerWrapperProps = wrapInButton 
+    ? { type: 'button' as const }
+    : { role: 'button' as const, tabIndex: 0 };
+
   return (
     <>
-      <button
+      <TriggerWrapper
         ref={triggerRef}
-        type="button"
+        {...triggerWrapperProps}
         data-slot="popover-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={triggerClassName || (wrapInButton 
+          ? "inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          : "cursor-pointer")}
         onClick={() => setOpen(!open)}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (!wrapInButton && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
       >
         {trigger}
-      </button>
+      </TriggerWrapper>
       {createPortal(content as React.ReactNode, (container ?? document.body) as Element)}
     </>
   );

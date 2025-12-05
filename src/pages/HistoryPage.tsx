@@ -111,8 +111,9 @@ const StatusBadge = ({
     <Popover
       open={popoverOpen}
       onOpenChange={setPopoverOpen}
+      wrapInButton={false}
       trigger={
-        <button
+        <span
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity',
             config.style
@@ -121,7 +122,7 @@ const StatusBadge = ({
           <Icon className="h-3 w-3" />
           {config.label}
           <ChevronDown className="h-3 w-3" />
-        </button>
+        </span>
       }
       align="end"
       side="bottom"
@@ -197,13 +198,15 @@ export function HistoryPage() {
         updatedStatusDates.tailored = new Date().toISOString()
       }
 
-      const updatedItem = await updateHistoryItem(itemId, { 
+      setHistoryItems(prev => 
+        prev.map(item => item.id === itemId ? { ...item, status: newStatus, status_dates: updatedStatusDates } : item)
+      )
+
+      await updateHistoryItem(itemId, { 
         status: newStatus,
         status_dates: updatedStatusDates
       })
-      setHistoryItems(prev => 
-        prev.map(item => item.id === itemId ? updatedItem : item)
-      )
+
     } catch (error) {
       console.error('Failed to update status:', error)
       // Optionally show an error toast here

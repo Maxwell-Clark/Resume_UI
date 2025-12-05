@@ -72,6 +72,24 @@ export function Layout({ children }: LayoutProps) {
               Tailor
             </Link>
             <Link
+              to="/match"
+              className={`block rounded-md px-3 py-2 hover:bg-accent ${
+                location.pathname === '/match' ? 'bg-accent' : ''
+              }`}
+              onClick={close}
+            >
+              Match
+            </Link>
+            <Link
+              to="/editor"
+              className={`block rounded-md px-3 py-2 hover:bg-accent ${
+                location.pathname.startsWith('/editor') ? 'bg-accent' : ''
+              }`}
+              onClick={close}
+            >
+              Editor
+            </Link>
+            <Link
               to="/history"
               className={`block rounded-md px-3 py-2 hover:bg-accent ${
                 location.pathname === '/history' ? 'bg-accent' : ''

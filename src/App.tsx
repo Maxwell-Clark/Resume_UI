@@ -14,6 +14,8 @@ import { FAQPage } from '@/pages/FAQPage'
 import { AboutPage } from '@/pages/AboutPage'
 import { ContactPage } from '@/pages/ContactPage'
 import { FeaturesPage } from '@/pages/FeaturesPage'
+import { ResumeMatchPage } from '@/pages/ResumeMatchPage'
+import { ResumeEditorPage } from '@/pages/ResumeEditorPage'
 
 function ProtectedLayout() {
   return (
@@ -64,6 +66,9 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="tailor" element={<TailoringPage />} />
+            <Route path="match" element={<ResumeMatchPage />} />
+            <Route path="editor" element={<ResumeEditorPage />} />
+            <Route path="editor/:id" element={<ResumeEditorPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="account" element={<AccountSettingsPage />} />
           </Route>
