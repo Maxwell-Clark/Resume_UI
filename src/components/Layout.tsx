@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { NavbarPreset } from "@/components/ui/navbar"
 import { Sidebar } from "@/components/ui/sidebar"
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationBell } from '@/components/NotificationBell'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
+import { LogOut, Menu, FileText } from 'lucide-react'
+import { SidebarNavigation } from './SidebarNavigation'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -14,7 +14,6 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [sideBarOpen, setSideBarOpen] = useState(false)
-  const location = useLocation()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -24,19 +23,72 @@ export function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
-      <NavbarPreset
-        brand={<span>AAA Resume</span>}
-        onSidebarToggle={() => setSideBarOpen(true)}
-        right={
-          <>
-            {user && (
-              <div className="flex items-center gap-2 mr-2">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  {user.email}
-                </span>
-              </div>
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 flex-col border-r bg-background/80 backdrop-blur-md fixed inset-y-0 z-30">
+        <div className="p-4 border-b flex items-center gap-2 h-16">
+          <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <span className="text-xl font-bold">AAA Resume</span>
+        </div>
+        <div className="flex-1 p-4 overflow-y-auto">
+          <SidebarNavigation />
+        </div>
+        {user && (
+          <div className="p-4 border-t bg-background/50">
+            <p className="text-xs text-muted-foreground truncate font-medium">
+              Signed in as
+            </p>
+            <p className="text-sm truncate" title={user.email}>
+              {user.email}
+            </p>
+          </div>
+        )}
+      </aside>
+
+      {/* Mobile Sidebar (Drawer) */}
+      <Sidebar
+        open={sideBarOpen}
+        onOpenChange={setSideBarOpen}
+        side="left"
+        title="Menu"
+        size="sm"
+      >
+        {(close) => (
+          <div className="flex flex-col h-full">
+            <div className="mb-6 flex items-center gap-2">
+              <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <span className="text-xl font-bold">AAA Resume</span>
+            </div>
+            <SidebarNavigation onLinkClick={close} />
+          </div>
+        )}
+      </Sidebar>
+
+      {/* Main Content Area */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        {/* Header */}
+        <header className="sticky top-0 z-20 w-full border-b bg-background/80 backdrop-blur-md h-16 flex items-center px-4 justify-between">
+          <div className="flex items-center gap-4">
+            {/* Mobile Hamburger */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setSideBarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+
+            {/* Mobile Brand */}
+            <div className="md:hidden font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <span className="text-lg">AAA Resume</span>
+            </div>
+          </div>
+
+          {/* Right Header Actions */}
+          <div className="flex items-center gap-2">
             <NotificationBell />
             <ThemeToggle />
             {user && (
@@ -44,73 +96,32 @@ export function Layout({ children }: LayoutProps) {
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
-                className="flex items-center gap-2"
+                className="hidden md:flex items-center gap-2"
               >
                 <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign Out</span>
+                <span>Sign Out</span>
               </Button>
             )}
-          </>
-        }
-      />
-      <Sidebar
-        open={sideBarOpen}
-        onOpenChange={setSideBarOpen}
-        side="left"
-        title="Quick actions"
-        size="md"
-      >
-        {(close) => (
-          <div className="space-y-3">
-            <Link
-              to="/tailor"
-              className={`block rounded-md px-3 py-2 hover:bg-accent ${
-                location.pathname === '/tailor' ? 'bg-accent' : ''
-              }`}
-              onClick={close}
-            >
-              Tailor
-            </Link>
-            <Link
-              to="/match"
-              className={`block rounded-md px-3 py-2 hover:bg-accent ${
-                location.pathname === '/match' ? 'bg-accent' : ''
-              }`}
-              onClick={close}
-            >
-              Match
-            </Link>
-            <Link
-              to="/editor"
-              className={`block rounded-md px-3 py-2 hover:bg-accent ${
-                location.pathname.startsWith('/editor') ? 'bg-accent' : ''
-              }`}
-              onClick={close}
-            >
-              Editor
-            </Link>
-            <Link
-              to="/history"
-              className={`block rounded-md px-3 py-2 hover:bg-accent ${
-                location.pathname === '/history' ? 'bg-accent' : ''
-              }`}
-              onClick={close}
-            >
-              History
-            </Link>
-            <Link
-              to="/account"
-              className={`block rounded-md px-3 py-2 hover:bg-accent ${
-                location.pathname === '/account' ? 'bg-accent' : ''
-              }`}
-              onClick={close}
-            >
-              Account
-            </Link>
+            {/* Mobile Sign Out (Icon Only) */}
+            {user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="md:hidden"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only">Sign Out</span>
+              </Button>
+            )}
           </div>
-        )}
-      </Sidebar>
-      {children}
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }
