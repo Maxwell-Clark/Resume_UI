@@ -9,6 +9,7 @@ import { saveHistoryItem, updateHistoryItem } from '@/lib/history'
 import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { useNavigate } from 'react-router-dom'
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
+import { useNotifications } from '@/contexts/NotificationContext'
 
 interface ParsedResume {
   person: any
@@ -97,6 +98,7 @@ SELF-CHECK BEFORE OUTPUT (internal only):
   const [filename, setFileName] = useState<string>('Tailored_Resume')
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
   const navigate = useNavigate()
+  const { addNotification } = useNotifications()
 
   // Poll for job status when historyId is set
   useJobStatusPolling(currentHistoryId, (completedItem) => {
@@ -108,6 +110,13 @@ SELF-CHECK BEFORE OUTPUT (internal only):
         path: '',
       },
       format: 'pdf',
+    })
+    
+    // Trigger success notification
+    addNotification({
+      title: 'Resume Tailored Successfully',
+      message: `Your resume for ${completedItem.job_title} at ${completedItem.company} is ready.`,
+      type: 'success'
     })
   })
 
@@ -221,6 +230,13 @@ SELF-CHECK BEFORE OUTPUT (internal only):
 
       // Step 3: Navigate to history page immediately
       navigate('/history')
+      
+      // Add info notification that processing started
+      addNotification({
+        title: 'Tailoring Started',
+        message: `We're tailoring your resume for ${job.title} at ${job.company}. You'll be notified when it's ready.`,
+        type: 'info'
+      })
 
       // Step 4: Continue processing in background
       // Parse resume
@@ -249,6 +265,13 @@ SELF-CHECK BEFORE OUTPUT (internal only):
     } catch (err) {
       console.error('Processing failed:', err)
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      
+      // Add error notification
+      addNotification({
+        title: 'Tailoring Failed',
+        message: err instanceof Error ? err.message : 'An unexpected error occurred while tailoring your resume.',
+        type: 'error'
+      })
       
       // Update history entry status to failed if we have a history ID
       if (currentHistoryId) {

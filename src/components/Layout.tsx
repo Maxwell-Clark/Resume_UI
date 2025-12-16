@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/ui/sidebar"
 import { useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NotificationBell } from '@/components/NotificationBell'
+import { ToastContainer } from '@/components/ToastContainer'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { LogOut, Menu, FileText } from 'lucide-react'
@@ -24,6 +25,9 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex">
+      {/* Toast Notifications */}
+      <ToastContainer />
+
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-col border-r bg-background/80 backdrop-blur-md fixed inset-y-0 z-30">
         <div className="p-4 border-b flex items-center gap-2 h-16">

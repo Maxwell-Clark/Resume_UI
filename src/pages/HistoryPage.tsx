@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover } from '@/components/ui/popover'
 import { getHistoryItems, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { resumeService } from '@/services/resume'
 import { cn } from '@/lib/utils'
 
 type EditableStatus = 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired'
@@ -156,7 +157,9 @@ const StatusBadge = ({
 export function HistoryPage() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [importingId, setImportingId] = useState<string | null>(null)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     // Load history from API
@@ -210,6 +213,48 @@ export function HistoryPage() {
     } catch (error) {
       console.error('Failed to update status:', error)
       // Optionally show an error toast here
+    }
+  }
+
+  const handleEdit = async (item: HistoryItem) => {
+    // If we have a resume_id, navigate directly to it
+    if (item.resume_id) {
+      navigate(`/editor/${item.resume_id}`)
+      return
+    }
+
+    // Fallback: Try to fetch from download_url if no resume_id exists
+    // NOTE: This will fail if download_url points to a PDF
+    if (!item.download_url) return
+
+    try {
+      setImportingId(item.id)
+      
+      // Fetch the content from the download URL
+      const response = await fetch(item.download_url)
+      if (!response.ok) throw new Error('Failed to fetch resume content')
+      
+      // Check content type to avoid parsing PDF as JSON
+      const contentType = response.headers.get('content-type')
+      if (contentType && !contentType.includes('application/json')) {
+        throw new Error('Cannot edit this resume: Source file is not JSON')
+      }
+
+      const content = await response.json()
+      
+      // Create a new resume entry in the database
+      const newResume = await resumeService.createResume({
+        name: `${item.file_name} (Edited)`,
+        content
+      })
+      
+      // Navigate to the editor with the new resume ID
+      navigate(`/editor/${newResume.id}`)
+    } catch (error) {
+      console.error('Failed to import resume for editing:', error)
+      alert(error instanceof Error ? error.message : 'Failed to import resume for editing')
+    } finally {
+      setImportingId(null)
     }
   }
 
@@ -325,12 +370,25 @@ export function HistoryPage() {
                     </div>
                   </div>
                 </div>
-                <div className="ml-4">
+                <div className="ml-4 flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleEdit(item)}
+                    disabled={(!item.download_url && !item.resume_id) || importingId === item.id || (item.status === 'tailoring' || item.status === 'failed')}
+                    className="flex items-center gap-2 w-full justify-start"
+                  >
+                    {importingId === item.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Edit className="h-4 w-4" />
+                    )}
+                    Edit
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => item.download_url && window.open(item.download_url, '_blank')}
                     disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 w-full justify-start"
                   >
                     <Download className="h-4 w-4" />
                     Download

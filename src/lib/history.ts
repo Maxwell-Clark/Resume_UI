@@ -12,6 +12,7 @@ export interface HistoryItem {
   status: StatusType
   status_dates?: Partial<Record<StatusType, string>>
   created_at: string
+  resume_id?: string
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -42,6 +43,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       status: data.status || 'tailoring',
       status_dates: data.status_dates || {},
       created_at: data.created_at,
+      resume_id: data.resume_id,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
@@ -64,6 +66,7 @@ export async function getHistoryItems(): Promise<HistoryItem[]> {
       status: item.status || 'tailoring',
       status_dates: item.status_dates || {},
       created_at: item.created_at,
+      resume_id: item.resume_id,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
@@ -88,6 +91,7 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       status: item.status || 'tailoring',
       status_dates: item.status_dates || {},
       created_at: item.created_at,
+      resume_id: item.resume_id,
     }
   } catch (error) {
     console.error('Error fetching history item:', error)
@@ -119,6 +123,7 @@ export async function updateHistoryItem(
       status: item.status || 'tailoring',
       status_dates: item.status_dates || {},
       created_at: item.created_at,
+      resume_id: item.resume_id,
     }
   } catch (error) {
     console.error('Error updating history item:', error)
