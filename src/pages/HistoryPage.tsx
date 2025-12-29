@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit } from 'lucide-react'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover } from '@/components/ui/popover'
-import { getHistoryItems, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { ConfirmationDialog } from '@/components/ui/dialog'
+import { getHistoryItems, updateHistoryItem, deleteHistoryItem, type HistoryItem } from '@/lib/history'
 import { resumeService } from '@/services/resume'
 import { cn } from '@/lib/utils'
 
@@ -158,6 +159,9 @@ export function HistoryPage() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [importingId, setImportingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -293,6 +297,29 @@ export function HistoryPage() {
       }))
   }
 
+  const handleDeleteClick = (item: HistoryItem) => {
+    setItemToDelete(item)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return
+
+    try {
+      setDeletingId(itemToDelete.id)
+      await deleteHistoryItem(itemToDelete.id)
+      
+      // Remove from local state
+      setHistoryItems(prev => prev.filter(i => i.id !== itemToDelete.id))
+    } catch (error) {
+      console.error('Failed to delete history item:', error)
+      alert(error instanceof Error ? error.message : 'Failed to delete history item')
+    } finally {
+      setDeletingId(null)
+      setItemToDelete(null)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 text-center">
@@ -393,12 +420,36 @@ export function HistoryPage() {
                     <Download className="h-4 w-4" />
                     Download
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDeleteClick(item)}
+                    disabled={deletingId === item.id}
+                    className="flex items-center gap-2 w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    {deletingId === item.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Delete
+                  </Button>
                 </div>
               </div>
             </div>
           ))
         )}
       </div>
+
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Resume"
+        description={itemToDelete ? `Are you sure you want to delete "${itemToDelete.file_name}"? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   )
 }

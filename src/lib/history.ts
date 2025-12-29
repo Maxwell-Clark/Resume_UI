@@ -131,6 +131,21 @@ export async function updateHistoryItem(
   }
 }
 
+export async function deleteHistoryItem(id: string): Promise<void> {
+  try {
+    const response = await authenticatedFetch(`/history/${id}`, {
+      method: 'DELETE',
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete history item')
+    }
+  } catch (error) {
+    console.error('Error deleting history item:', error)
+    throw error
+  }
+}
+
 export function clearHistory(): void {
   localStorage.removeItem(HISTORY_STORAGE_KEY)
 }
