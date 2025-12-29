@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award } from 'lucide-react'
 
 // Type definitions
 type WorkEntry = {
@@ -457,33 +457,28 @@ export function ResumeEditorPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-8">
+        <div className="flex items-center gap-4 mb-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/resumes')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{resume.name}</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Last updated: {new Date(resume.updated_at).toLocaleDateString()}
-            </p>
-          </div>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          Save Changes
-        </Button>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Edit Resume</h1>
+          <p className="text-slate-600 dark:text-slate-400">
+            {resume.name} • Last updated: {new Date(resume.updated_at).toLocaleDateString()}
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-6">
+      <div className="space-y-8">
         {/* Basics Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Personal Information</h2>
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Personal Information</h2>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -539,9 +534,12 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Experience Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Experience</h2>
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Experience</h2>
+            </div>
             <Button variant="outline" size="sm" onClick={addWorkEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Experience
             </Button>
@@ -636,9 +634,12 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Education Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Education</h2>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Education</h2>
+            </div>
             <Button variant="outline" size="sm" onClick={addEducationEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Education
             </Button>
@@ -732,9 +733,12 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Skills Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Skills</h2>
+            <div className="flex items-center gap-2">
+              <Code className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Skills</h2>
+            </div>
             <Button variant="outline" size="sm" onClick={addSkillCategory}>
               <Plus className="mr-2 h-4 w-4" /> Add Category
             </Button>
@@ -785,9 +789,12 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Projects Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Projects</h2>
+            <div className="flex items-center gap-2">
+              <FolderKanban className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Projects</h2>
+            </div>
             <Button variant="outline" size="sm" onClick={addProjectEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Project
             </Button>
@@ -874,9 +881,12 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Certifications Section */}
-        <section className="rounded-lg border bg-card p-6 shadow-sm">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Certifications</h2>
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Certifications</h2>
+            </div>
             <Button variant="outline" size="sm" onClick={addCertificationEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Certification
             </Button>
@@ -923,6 +933,28 @@ export function ResumeEditorPage() {
             </div>
           )}
         </section>
+
+        {/* Save Button */}
+        <div className="flex justify-center pt-2">
+          <Button 
+            onClick={handleSave}
+            disabled={saving}
+            className="px-10 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
+            size="lg"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-5 w-5" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   )
