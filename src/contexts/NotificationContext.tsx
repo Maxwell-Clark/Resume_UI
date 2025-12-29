@@ -10,13 +10,15 @@ export interface Notification {
   type: NotificationType
   timestamp: Date
   read: boolean
+  displayed: boolean
 }
 
 interface NotificationContextType {
   notifications: Notification[]
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read' | 'displayed'>) => void
   markAsRead: (id: string) => void
   markAllAsRead: () => void
+  markAsDisplayed: (id: string) => void
   removeNotification: (id: string) => void
   unreadCount: number
 }
@@ -26,21 +28,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
+  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'read' | 'displayed'>) => {
     const newNotification: Notification = {
       ...notification,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       timestamp: new Date(),
       read: false,
+      displayed: false,
     }
     setNotifications((prev) => [newNotification, ...prev])
-    
-    // Auto-remove success notifications after 5 seconds
-    if (notification.type === 'success') {
-      setTimeout(() => {
-        setNotifications((prev) => prev.filter((n) => n.id !== newNotification.id))
-      }, 5000)
-    }
   }, [])
 
   const markAsRead = useCallback((id: string) => {
@@ -51,6 +47,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  }, [])
+
+  const markAsDisplayed = useCallback((id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, displayed: true } : n))
+    )
   }, [])
 
   const removeNotification = useCallback((id: string) => {
@@ -66,6 +68,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         addNotification,
         markAsRead,
         markAllAsRead,
+        markAsDisplayed,
         removeNotification,
         unreadCount,
       }}

@@ -59,8 +59,10 @@ function Toast({ notification, onClose }: ToastProps) {
 }
 
 export function ToastContainer() {
-  const { notifications, removeNotification } = useNotifications()
-  const toasts = notifications.slice(0, 3) // Show max 3 toasts
+  const { notifications, markAsDisplayed } = useNotifications()
+  // Only show notifications that haven't been displayed yet
+  const undisplayedNotifications = notifications.filter(n => !n.displayed)
+  const toasts = undisplayedNotifications.slice(0, 3) // Show max 3 toasts
 
   if (toasts.length === 0) return null
 
@@ -70,7 +72,7 @@ export function ToastContainer() {
         <Toast
           key={notification.id}
           notification={notification}
-          onClose={() => removeNotification(notification.id)}
+          onClose={() => markAsDisplayed(notification.id)}
         />
       ))}
     </div>
