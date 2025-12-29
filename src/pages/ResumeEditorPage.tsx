@@ -464,8 +464,8 @@ export function ResumeEditorPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{resume.name}</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{resume.name}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Last updated: {new Date(resume.updated_at).toLocaleDateString()}
             </p>
           </div>
@@ -483,7 +483,7 @@ export function ResumeEditorPage() {
       <div className="grid gap-6">
         {/* Basics Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">Personal Information</h2>
+          <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Personal Information</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -541,19 +541,19 @@ export function ResumeEditorPage() {
         {/* Experience Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Experience</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Experience</h2>
             <Button variant="outline" size="sm" onClick={addWorkEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Experience
             </Button>
           </div>
           {work.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No experience entries yet. Click "Add Experience" to get started.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No experience entries yet. Click "Add Experience" to get started.</p>
           ) : (
             <div className="space-y-6">
               {work.map((entry, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-4">
                   <div className="flex items-start justify-between">
-                    <h3 className="font-medium">Experience #{index + 1}</h3>
+                    <h3 className="font-medium text-slate-900 dark:text-slate-100">Experience #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeWorkEntry(index)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
@@ -638,19 +638,19 @@ export function ResumeEditorPage() {
         {/* Education Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Education</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Education</h2>
             <Button variant="outline" size="sm" onClick={addEducationEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Education
             </Button>
           </div>
           {education.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No education entries yet. Click "Add Education" to get started.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No education entries yet. Click "Add Education" to get started.</p>
           ) : (
             <div className="space-y-6">
               {education.map((entry, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-4">
                   <div className="flex items-start justify-between">
-                    <h3 className="font-medium">Education #{index + 1}</h3>
+                    <h3 className="font-medium text-slate-900 dark:text-slate-100">Education #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeEducationEntry(index)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
@@ -734,13 +734,13 @@ export function ResumeEditorPage() {
         {/* Skills Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Skills</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Skills</h2>
             <Button variant="outline" size="sm" onClick={addSkillCategory}>
               <Plus className="mr-2 h-4 w-4" /> Add Category
             </Button>
           </div>
           {skills.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No skill categories yet. Click "Add Category" to get started.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No skill categories yet. Click "Add Category" to get started.</p>
           ) : (
             <div className="space-y-6">
               {skills.map((category, index) => (
@@ -787,19 +787,19 @@ export function ResumeEditorPage() {
         {/* Projects Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Projects</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Projects</h2>
             <Button variant="outline" size="sm" onClick={addProjectEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Project
             </Button>
           </div>
           {projects.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No projects yet. Click "Add Project" to get started.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No projects yet. Click "Add Project" to get started.</p>
           ) : (
             <div className="space-y-6">
               {projects.map((entry, index) => (
                 <div key={index} className="border rounded-lg p-4 space-y-4">
                   <div className="flex items-start justify-between">
-                    <h3 className="font-medium">Project #{index + 1}</h3>
+                    <h3 className="font-medium text-slate-900 dark:text-slate-100">Project #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeProjectEntry(index)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
@@ -876,13 +876,13 @@ export function ResumeEditorPage() {
         {/* Certifications Section */}
         <section className="rounded-lg border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Certifications</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Certifications</h2>
             <Button variant="outline" size="sm" onClick={addCertificationEntry}>
               <Plus className="mr-2 h-4 w-4" /> Add Certification
             </Button>
           </div>
           {certifications.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-4">No certifications yet. Click "Add Certification" to get started.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications yet. Click "Add Certification" to get started.</p>
           ) : (
             <div className="space-y-4">
               {certifications.map((entry, index) => (

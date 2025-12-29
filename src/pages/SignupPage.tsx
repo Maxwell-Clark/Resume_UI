@@ -102,7 +102,7 @@ export function SignupPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 text-slate-900"
+                  className="pl-10"
                 />
               </div>
             </div>
@@ -214,4 +214,8 @@ export function SignupPage() {
     </div>
   )
 }
+
+
+
+
 
