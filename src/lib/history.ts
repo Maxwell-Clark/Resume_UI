@@ -51,9 +51,9 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
   }
 }
 
-export async function getHistoryItems(): Promise<HistoryItem[]> {
+export async function getHistoryItems(offset: number = 0, limit: number = 50): Promise<HistoryItem[]> {
   try {
-    const response = await authenticatedFetch('/history?limit=50')
+    const response = await authenticatedFetch(`/history?limit=${limit}&offset=${offset}`)
     
     const data = await handleApiResponse<HistoryItem[]>(response)
     return data.map((item: any) => ({
@@ -151,3 +151,42 @@ export function clearHistory(): void {
 }
 
 const HISTORY_STORAGE_KEY = 'resume_tailoring_history'
+const HISTORY_CACHE_KEY = 'resume_history_cache'
+
+/**
+ * Save cached history ranges to localStorage
+ */
+export function saveHistoryCache(cachedRanges: Map<string, HistoryItem[]>): void {
+  try {
+    // Convert Map to plain object for localStorage
+    const cacheObject: Record<string, HistoryItem[]> = {}
+    cachedRanges.forEach((items, key) => {
+      cacheObject[key] = items
+    })
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(cacheObject))
+  } catch (error) {
+    console.error('Error saving history cache to localStorage:', error)
+  }
+}
+
+/**
+ * Load cached history ranges from localStorage
+ */
+export function loadHistoryCache(): Map<string, HistoryItem[]> | null {
+  try {
+    const cached = localStorage.getItem(HISTORY_CACHE_KEY)
+    if (!cached) return null
+    
+    const cacheObject: Record<string, HistoryItem[]> = JSON.parse(cached)
+    const map = new Map<string, HistoryItem[]>()
+    
+    Object.entries(cacheObject).forEach(([key, items]) => {
+      map.set(key, items)
+    })
+    
+    return map
+  } catch (error) {
+    console.error('Error loading history cache from localStorage:', error)
+    return null
+  }
+}

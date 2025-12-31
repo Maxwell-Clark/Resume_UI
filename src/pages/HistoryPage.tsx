@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover } from '@/components/ui/popover'
 import { ConfirmationDialog } from '@/components/ui/dialog'
-import { getHistoryItems, updateHistoryItem, deleteHistoryItem, type HistoryItem } from '@/lib/history'
+import { getHistoryItems, updateHistoryItem, deleteHistoryItem, saveHistoryCache, loadHistoryCache, type HistoryItem } from '@/lib/history'
 import { resumeService } from '@/services/resume'
 import { cn } from '@/lib/utils'
+import { useNotifications } from '@/contexts/NotificationContext'
+
+const ITEMS_PER_PAGE = 20
+const CACHE_BATCH_SIZE = 50
 
 type EditableStatus = 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired'
 
@@ -156,41 +160,243 @@ const StatusBadge = ({
 }
 
 export function HistoryPage() {
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([])
+  const [cachedRanges, setCachedRanges] = useState<Map<string, HistoryItem[]>>(new Map())
+  const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMoreItems, setHasMoreItems] = useState(true)
   const [importingId, setImportingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null)
-  const location = useLocation()
   const navigate = useNavigate()
+  const location = useLocation()
+  const cachedRangesRef = useRef<Map<string, HistoryItem[]>>(new Map())
+  const { addNotification } = useNotifications()
+  const notifiedItemsRef = useRef<Set<string>>(new Set())
 
+  // Get cache key for a range
+  const getCacheKey = (offset: number, limit: number) => `${offset}-${offset + limit - 1}`
+  
+  // Keep ref in sync with state
   useEffect(() => {
-    // Load history from API
-    const loadHistory = async () => {
-      try {
-        const items = await getHistoryItems()
-        setHistoryItems(items)
-      } catch (error) {
-        console.error('Failed to load history:', error)
-      } finally {
-        setIsLoading(false)
+    cachedRangesRef.current = cachedRanges
+  }, [cachedRanges])
+
+  // Get all cached items sorted by index
+  const getAllCachedItems = useMemo(() => {
+    const items: HistoryItem[] = []
+    const ranges = Array.from(cachedRanges.entries())
+      .map(([key, items]) => {
+        const [start] = key.split('-').map(Number)
+        return { start, items }
+      })
+      .sort((a, b) => a.start - b.start)
+    
+    ranges.forEach(({ items: rangeItems }) => {
+      items.push(...rangeItems)
+    })
+    
+    return items
+  }, [cachedRanges])
+
+  // Get items for current page
+  const currentPageItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    return getAllCachedItems.slice(startIndex, endIndex)
+  }, [getAllCachedItems, currentPage])
+
+  // Calculate total pages based on cached items
+  const totalPages = useMemo(() => {
+    const totalItems = getAllCachedItems.length
+    // If we have a full batch and it's the last page, there might be more
+    // Otherwise, calculate based on what we have
+    if (hasMoreItems && getAllCachedItems.length > 0 && getAllCachedItems.length % CACHE_BATCH_SIZE === 0) {
+      // We might have more, so add one more page
+      return Math.ceil((getAllCachedItems.length + ITEMS_PER_PAGE) / ITEMS_PER_PAGE)
+    }
+    return Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+  }, [getAllCachedItems.length, hasMoreItems])
+
+  // Fetch a batch of items
+  const fetchBatch = useCallback(async (offset: number, limit: number = CACHE_BATCH_SIZE) => {
+    const items = await getHistoryItems(offset, limit)
+    const cacheKey = getCacheKey(offset, limit)
+    
+    setCachedRanges(prev => {
+      const newMap = new Map(prev)
+      newMap.set(cacheKey, items)
+      // Persist to localStorage
+      saveHistoryCache(newMap)
+      return newMap
+    })
+    
+    // If we got fewer items than requested, we've reached the end
+    if (items.length < limit) {
+      setHasMoreItems(false)
+    }
+    
+    return items
+  }, [])
+
+  // Fetch batch if needed for current page
+  const ensureBatchForPage = useCallback(async (page: number) => {
+    const startIndex = (page - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    
+    // Calculate which batch ranges we need
+    const neededRanges: number[] = []
+    for (let i = startIndex; i < endIndex; i++) {
+      const batchStart = Math.floor(i / CACHE_BATCH_SIZE) * CACHE_BATCH_SIZE
+      if (!neededRanges.includes(batchStart)) {
+        neededRanges.push(batchStart)
       }
     }
     
-    loadHistory()
+    // Fetch any missing ranges
+    let hasLoading = false
+    const fetchPromises = neededRanges.map(async (offset) => {
+      const cacheKey = getCacheKey(offset, CACHE_BATCH_SIZE)
+      if (!cachedRangesRef.current.has(cacheKey)) {
+        if (!hasLoading) {
+          hasLoading = true
+          setIsLoadingMore(true)
+        }
+        try {
+          await fetchBatch(offset, CACHE_BATCH_SIZE)
+        } finally {
+          // Only set loading to false if this was the last promise
+        }
+      }
+    })
+    
+    await Promise.all(fetchPromises)
+    if (hasLoading) {
+      setIsLoadingMore(false)
+    }
+  }, [fetchBatch])
 
-    // Poll for updates on tailoring items every 3 seconds
-    const interval = setInterval(() => {
-      loadHistory()
-    }, 3000)
+  // Initial load - check cache first, then fetch if needed
+  const loadInitialHistory = useCallback(async (forceRefresh = false) => {
+    try {
+      // If force refresh, skip cache and fetch directly
+      if (forceRefresh) {
+        setIsLoading(true)
+        await fetchBatch(0, CACHE_BATCH_SIZE)
+        setIsLoading(false)
+        return
+      }
 
-    return () => clearInterval(interval)
-  }, [location.pathname])
+      // Load from cache first
+      const cached = loadHistoryCache()
+      if (cached && cached.size > 0) {
+        setCachedRanges(cached)
+        setIsLoading(false)
+        // Still fetch in background to get latest data, but don't show loading
+        fetchBatch(0, CACHE_BATCH_SIZE).catch(err => {
+          console.error('Failed to refresh history:', err)
+        })
+      } else {
+        // No cache, fetch from API
+        setIsLoading(true)
+        await fetchBatch(0, CACHE_BATCH_SIZE)
+        setIsLoading(false)
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error)
+      setIsLoading(false)
+    }
+  }, [fetchBatch])
+
+  useEffect(() => {
+    // Check if navigation state has forceRefresh flag or if there's a pending tailoring ID
+    const navState = location.state as any
+    const pendingId = localStorage.getItem('pending_tailoring_id')
+    const forceRefresh = navState?.forceRefresh === true || !!pendingId
+    loadInitialHistory(forceRefresh)
+    // Clear navigation state after using it to prevent re-triggering
+    if (navState?.forceRefresh) {
+      window.history.replaceState({}, '', location.pathname)
+    }
+  }, [loadInitialHistory, location.pathname])
+
+  // Poll for status updates on items with 'tailoring' status
+  useEffect(() => {
+    // Check for pending tailoring ID from localStorage
+    const pendingId = localStorage.getItem('pending_tailoring_id')
+    const tailoringItems = getAllCachedItems.filter(item => item.status === 'tailoring')
+    const shouldPoll = tailoringItems.length > 0 || !!pendingId
+    
+    if (!shouldPoll) return
+
+    // Track which items were tailoring when polling started
+    const previousTailoringIds = new Set(tailoringItems.map(item => item.id))
+
+    const pollInterval = setInterval(async () => {
+      // Get fresh pending ID on each poll
+      const currentPendingId = localStorage.getItem('pending_tailoring_id')
+      try {
+        const fetchedItems = await fetchBatch(0, CACHE_BATCH_SIZE)
+        
+        // Get current state of all items
+        const allItems = Array.from(cachedRangesRef.current.values()).flat()
+        
+        // Check if pending item is now complete and clear it
+        if (currentPendingId) {
+          const pendingItem = allItems.find(item => item.id === currentPendingId) || fetchedItems.find(item => item.id === currentPendingId)
+          if (pendingItem && pendingItem.status !== 'tailoring') {
+            // Item is no longer tailoring, clear the pending ID
+            localStorage.removeItem('pending_tailoring_id')
+            
+            // Show notification if status is complete and we haven't notified yet
+            if (pendingItem.status === 'complete' && !notifiedItemsRef.current.has(pendingItem.id)) {
+              notifiedItemsRef.current.add(pendingItem.id)
+              addNotification({
+                title: 'Tailoring Complete',
+                message: `${pendingItem.file_name} is ready for download.`,
+                type: 'success'
+              })
+            }
+          }
+        }
+        
+        // Check all items that were previously tailoring to see if any changed to complete
+        allItems.forEach(item => {
+          if (item.status === 'complete' && !notifiedItemsRef.current.has(item.id) && previousTailoringIds.has(item.id)) {
+            notifiedItemsRef.current.add(item.id)
+            addNotification({
+              title: 'Tailoring Complete',
+              message: `${item.file_name} is ready for download.`,
+              type: 'success'
+            })
+          }
+        })
+      } catch (err) {
+        console.error('Failed to poll for status updates:', err)
+      }
+    }, 3000) // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [getAllCachedItems, fetchBatch, addNotification])
+
+  // Ensure we have the batch for current page
+  useEffect(() => {
+    if (!isLoading && currentPageItems.length === 0 && hasMoreItems) {
+      ensureBatchForPage(currentPage)
+    }
+  }, [currentPage, isLoading, currentPageItems.length, hasMoreItems, ensureBatchForPage])
+
+  // Persist cache to localStorage whenever cachedRanges changes
+  useEffect(() => {
+    if (cachedRanges.size > 0) {
+      saveHistoryCache(cachedRanges)
+    }
+  }, [cachedRanges])
 
   const handleStatusChange = async (itemId: string, newStatus: EditableStatus) => {
     try {
-      const currentItem = historyItems.find(item => item.id === itemId)
+      const currentItem = getAllCachedItems.find(item => item.id === itemId)
       const currentStatusDates = currentItem?.status_dates || {}
       const isTransitioningFromComplete = currentItem?.status === 'complete' || currentItem?.status === 'failed'
       
@@ -205,9 +411,19 @@ export function HistoryPage() {
         updatedStatusDates.tailored = new Date().toISOString()
       }
 
-      setHistoryItems(prev => 
-        prev.map(item => item.id === itemId ? { ...item, status: newStatus, status_dates: updatedStatusDates } : item)
-      )
+      // Update in all cached ranges
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const updatedItems = items.map(item => 
+            item.id === itemId 
+              ? { ...item, status: newStatus, status_dates: updatedStatusDates }
+              : item
+          )
+          newMap.set(key, updatedItems)
+        })
+        return newMap
+      })
 
       await updateHistoryItem(itemId, { 
         status: newStatus,
@@ -309,8 +525,24 @@ export function HistoryPage() {
       setDeletingId(itemToDelete.id)
       await deleteHistoryItem(itemToDelete.id)
       
-      // Remove from local state
-      setHistoryItems(prev => prev.filter(i => i.id !== itemToDelete.id))
+      // Remove from all cached ranges
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const filteredItems = items.filter(i => i.id !== itemToDelete.id)
+          if (filteredItems.length > 0) {
+            newMap.set(key, filteredItems)
+          } else {
+            newMap.delete(key)
+          }
+        })
+        return newMap
+      })
+      
+      // Adjust current page if needed
+      if (currentPageItems.length === 0 && currentPage > 1) {
+        setCurrentPage(prev => Math.max(1, prev - 1))
+      }
     } catch (error) {
       console.error('Failed to delete history item:', error)
       alert(error instanceof Error ? error.message : 'Failed to delete history item')
@@ -318,6 +550,13 @@ export function HistoryPage() {
       setDeletingId(null)
       setItemToDelete(null)
     }
+  }
+
+  const handlePageChange = async (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return
+    
+    setCurrentPage(newPage)
+    await ensureBatchForPage(newPage)
   }
 
   return (
@@ -333,14 +572,15 @@ export function HistoryPage() {
             <History className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4 animate-pulse" />
             <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Loading History...</h3>
           </div>
-        ) : historyItems.length === 0 ? (
+        ) : getAllCachedItems.length === 0 && !isLoadingMore ? (
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
             <History className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No History Yet</h3>
             <p className="text-slate-600 dark:text-slate-400">Your tailored resumes will appear here once you create them.</p>
           </div>
         ) : (
-          historyItems.map((item) => (
+          <>
+            {currentPageItems.map((item) => (
             <div key={item.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
@@ -436,7 +676,70 @@ export function HistoryPage() {
                 </div>
               </div>
             </div>
-          ))
+            ))}
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isLoadingMore}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        disabled={isLoadingMore}
+                        className="min-w-[2.5rem]"
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages || isLoadingMore || !hasMoreItems}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            
+            {isLoadingMore && (
+              <div className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+                Loading more items...
+              </div>
+            )}
+          </>
         )}
       </div>
 

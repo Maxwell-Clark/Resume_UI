@@ -10,6 +10,8 @@ import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { useNavigate } from 'react-router-dom'
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { ResumeSelectionDialog, type ResumeSelectionResult } from '@/components/ResumeSelectionDialog'
+import { type Resume } from '@/services/resume'
 
 interface ParsedResume {
   person: any
@@ -42,6 +44,8 @@ interface TailorResponse {
 
 export function TailoringPage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
+  const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
   const [jobDescription, setJobDescription] = useState('')
   const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
   const defaultPrompt = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
@@ -124,10 +128,23 @@ SELF-CHECK BEFORE OUTPUT (internal only):
     setPrompt(defaultPrompt)
   }
 
+  const handleResumeSelection = (result: ResumeSelectionResult) => {
+    if (result.type === 'existing') {
+      setSelectedResume(result.resume)
+      setResumeFile(null)
+      setError(null)
+    } else {
+      setResumeFile(result.file)
+      setSelectedResume(null)
+      setError(null)
+    }
+  }
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file && file.type === 'application/pdf') {
       setResumeFile(file)
+      setSelectedResume(null)
       setError(null)
     } else {
       setError('Please select a PDF file')
@@ -165,11 +182,18 @@ SELF-CHECK BEFORE OUTPUT (internal only):
     return result.job_json || result
   }
 
-  const tailorResume = async (resume: ParsedResume, job: JobData, file_name: string, historyId?: string | null): Promise<TailorResponse> => {
+  const tailorResume = async (resume: ParsedResume, job: JobData, file_name: string, historyId?: string | null, customPrompt?: string): Promise<TailorResponse> => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TailoringPage.tsx:168',message:'tailorResume called',data:{hasCustomPrompt:!!customPrompt,promptLength:customPrompt?.length||0,promptPreview:customPrompt?.substring(0,100)||'none'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const payload = {
       resume_jsonresume: resume,
-      job_json: job
+      job_json: job,
+      ...(customPrompt && { custom_prompt: customPrompt })
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TailoringPage.tsx:175',message:'Payload created',data:{hasCustomPrompt:!!payload.custom_prompt,payloadKeys:Object.keys(payload)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
     // Build query parameters
     const params = new URLSearchParams({
@@ -196,8 +220,8 @@ SELF-CHECK BEFORE OUTPUT (internal only):
   }
 
   const handleSubmit = async () => {
-    if (!resumeFile) {
-      setError('Please upload a resume PDF')
+    if (!resumeFile && !selectedResume) {
+      setError('Please select or upload a resume')
       return
     }
     if (!jobDescription.trim()) {
@@ -208,6 +232,12 @@ SELF-CHECK BEFORE OUTPUT (internal only):
     setIsProcessing(true)
     setError(null)
     setTailoredResult(null)
+
+    // Navigate to history page immediately when user clicks "Tailor"
+    navigate('/history', { 
+      state: { forceRefresh: true },
+      replace: false
+    })
 
     try {
       // Step 1: Parse job description first to get job info
@@ -222,14 +252,14 @@ SELF-CHECK BEFORE OUTPUT (internal only):
         file_name: filename || 'Tailored_Resume',
         job_title: job.title || 'Unknown Position',
         company: job.company || 'Unknown Company',
-        original_resume_name: resumeFile.name,
+        original_resume_name: resumeFile?.name || selectedResume?.name || 'Resume',
         status: 'tailoring',
       })
       setCurrentHistoryId(historyItem.id)
       console.log('History entry created:', historyItem)
 
-      // Step 3: Navigate to history page immediately
-      navigate('/history')
+      // Store the history ID in localStorage so HistoryPage can track it
+      localStorage.setItem('pending_tailoring_id', historyItem.id)
       
       // Add info notification that processing started
       addNotification({
@@ -238,16 +268,27 @@ SELF-CHECK BEFORE OUTPUT (internal only):
         type: 'info'
       })
 
-      // Step 4: Continue processing in background
-      // Parse resume
-      console.log('Parsing resume...')
-      const resume = await parseResume(resumeFile)
-      setParsedResume(resume)
-      console.log('Resume parsed:', resume)
+      // Step 3: Get resume data (either from existing or parse new)
+      let resume: ParsedResume
+      if (selectedResume) {
+        // Use existing resume JSON directly (skip parsing)
+        console.log('Using existing resume JSON (skipping parse)...')
+        resume = selectedResume.content as ParsedResume
+        setParsedResume(resume)
+        console.log('Resume loaded from existing:', resume)
+      } else if (resumeFile) {
+        // Parse new resume
+        console.log('Parsing resume...')
+        resume = await parseResume(resumeFile)
+        setParsedResume(resume)
+        console.log('Resume parsed:', resume)
+      } else {
+        throw new Error('No resume selected or uploaded')
+      }
 
       // Tailor resume (pass history_id so backend can update it automatically)
       console.log('Tailoring resume...')
-      const result = await tailorResume(resume, job, filename, historyItem.id)
+      const result = await tailorResume(resume, job, filename, historyItem.id, prompt)
       console.log('Resume tailored:', result)
 
       // History entry is automatically updated by the backend, but we can still update status_dates if needed
@@ -301,31 +342,43 @@ SELF-CHECK BEFORE OUTPUT (internal only):
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-2">
             <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Upload</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Selection</h2>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-            Upload your resume in PDF format. The system will analyze and tailor it based on the job description you provide.
+            Select an existing resume or upload a new one in PDF format. The system will analyze and tailor it based on the job description you provide.
           </p>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="resume-upload" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Resume File (PDF only)
+              <Label htmlFor="resume-select" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Resume
               </Label>
-              <Input
-                id="resume-upload"
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30"
-              />
+              <Button
+                id="resume-select"
+                type="button"
+                variant="outline"
+                onClick={() => setResumeSelectionDialogOpen(true)}
+                className="w-full justify-start"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {selectedResume ? `Selected: ${selectedResume.name}` : resumeFile ? `Selected: ${resumeFile.name}` : 'Select or Upload Resume'}
+              </Button>
             </div>
-            {resumeFile && (
+            {(resumeFile || selectedResume) && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-md">
-                <Upload className="h-4 w-4" />
-                <span>Selected: {resumeFile.name}</span>
+                <CheckCircle className="h-4 w-4" />
+                <span>
+                  {selectedResume 
+                    ? `Using existing resume: ${selectedResume.name}` 
+                    : `Selected: ${resumeFile?.name}`}
+                </span>
               </div>
             )}
           </div>
+          <ResumeSelectionDialog
+            open={resumeSelectionDialogOpen}
+            onOpenChange={setResumeSelectionDialogOpen}
+            onSelect={handleResumeSelection}
+          />
         </div>
 
         {/* Job Description Section */}
@@ -457,7 +510,7 @@ SELF-CHECK BEFORE OUTPUT (internal only):
         <div className="flex justify-center pt-2">
           <Button 
             onClick={handleSubmit}
-            disabled={isProcessing || !resumeFile || !jobDescription.trim()}
+            disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
             className="px-10 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
             size="lg"
           >

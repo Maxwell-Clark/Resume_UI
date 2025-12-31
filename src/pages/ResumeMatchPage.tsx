@@ -6,6 +6,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Upload, FileText, Link, Type, Loader2, CheckCircle, AlertCircle, TrendingUp, ThumbsUp, AlertTriangle } from 'lucide-react'
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
+import { ResumeSelectionDialog, type ResumeSelectionResult } from '@/components/ResumeSelectionDialog'
+import { type Resume } from '@/services/resume'
 
 interface ParsedResume {
   person: any
@@ -32,6 +34,8 @@ interface MatchResponse {
 
 export function ResumeMatchPage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
+  const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
   const [jobDescription, setJobDescription] = useState('')
   const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
   
@@ -43,10 +47,23 @@ export function ResumeMatchPage() {
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const handleResumeSelection = (result: ResumeSelectionResult) => {
+    if (result.type === 'existing') {
+      setSelectedResume(result.resume)
+      setResumeFile(null)
+      setError(null)
+    } else {
+      setResumeFile(result.file)
+      setSelectedResume(null)
+      setError(null)
+    }
+  }
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file && file.type === 'application/pdf') {
       setResumeFile(file)
+      setSelectedResume(null)
       setError(null)
     } else {
       setError('Please select a PDF file')
@@ -103,8 +120,8 @@ export function ResumeMatchPage() {
   }
 
   const handleSubmit = async () => {
-    if (!resumeFile) {
-      setError('Please upload a resume PDF')
+    if (!resumeFile && !selectedResume) {
+      setError('Please select or upload a resume')
       return
     }
     if (!jobDescription.trim()) {
@@ -123,11 +140,23 @@ export function ResumeMatchPage() {
       setParsedJob(job)
       console.log('Job parsed:', job)
 
-      // Step 2: Parse resume
-      console.log('Parsing resume...')
-      const resume = await parseResume(resumeFile)
-      setParsedResume(resume)
-      console.log('Resume parsed:', resume)
+      // Step 2: Get resume data (either from existing or parse new)
+      let resume: ParsedResume
+      if (selectedResume) {
+        // Use existing resume JSON directly (skip parsing)
+        console.log('Using existing resume JSON (skipping parse)...')
+        resume = selectedResume.content as ParsedResume
+        setParsedResume(resume)
+        console.log('Resume loaded from existing:', resume)
+      } else if (resumeFile) {
+        // Parse new resume
+        console.log('Parsing resume...')
+        resume = await parseResume(resumeFile)
+        setParsedResume(resume)
+        console.log('Resume parsed:', resume)
+      } else {
+        throw new Error('No resume selected or uploaded')
+      }
 
       // Step 3: Match resume
       console.log('Matching resume...')
@@ -161,31 +190,43 @@ export function ResumeMatchPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-2">
             <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Upload</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Selection</h2>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-            Upload your resume in PDF format.
+            Select an existing resume or upload a new one in PDF format.
           </p>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="resume-upload" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Resume File (PDF only)
+              <Label htmlFor="resume-select" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Resume
               </Label>
-              <Input
-                id="resume-upload"
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 dark:file:bg-blue-900/20 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/30"
-              />
+              <Button
+                id="resume-select"
+                type="button"
+                variant="outline"
+                onClick={() => setResumeSelectionDialogOpen(true)}
+                className="w-full justify-start"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {selectedResume ? `Selected: ${selectedResume.name}` : resumeFile ? `Selected: ${resumeFile.name}` : 'Select or Upload Resume'}
+              </Button>
             </div>
-            {resumeFile && (
+            {(resumeFile || selectedResume) && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-md">
-                <Upload className="h-4 w-4" />
-                <span>Selected: {resumeFile.name}</span>
+                <CheckCircle className="h-4 w-4" />
+                <span>
+                  {selectedResume 
+                    ? `Using existing resume: ${selectedResume.name}` 
+                    : `Selected: ${resumeFile?.name}`}
+                </span>
               </div>
             )}
           </div>
+          <ResumeSelectionDialog
+            open={resumeSelectionDialogOpen}
+            onOpenChange={setResumeSelectionDialogOpen}
+            onSelect={handleResumeSelection}
+          />
         </div>
 
         {/* Job Description Section */}
@@ -248,7 +289,7 @@ export function ResumeMatchPage() {
         <div className="flex justify-center pt-2">
           <Button 
             onClick={handleSubmit}
-            disabled={isProcessing || !resumeFile || !jobDescription.trim()}
+            disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
             className="px-10 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
             size="lg"
           >
