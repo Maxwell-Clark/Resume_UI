@@ -37,13 +37,13 @@ export function Layout({ children }: LayoutProps) {
         <div className="flex-1 p-4 overflow-y-auto">
           <SidebarNavigation />
         </div>
-        {user && (
+            {user && (
           <div className="p-4 border-t bg-background/50">
             <p className="text-xs text-muted-foreground truncate font-medium">
               Signed in as
             </p>
             <p className="text-sm truncate" title={user.email}>
-              {user.email}
+                  {user.email}
             </p>
           </div>
         )}
@@ -64,8 +64,8 @@ export function Layout({ children }: LayoutProps) {
               <span className="text-xl font-bold">AAA Resume</span>
             </div>
             <SidebarNavigation onLinkClick={close} />
-          </div>
-        )}
+              </div>
+            )}
       </Sidebar>
 
       {/* Main Content Area */}
@@ -123,7 +123,7 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Page Content */}
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-          {children}
+      {children}
         </main>
       </div>
     </div>

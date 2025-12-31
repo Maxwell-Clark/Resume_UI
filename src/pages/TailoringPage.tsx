@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Upload, FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle, RotateCcw, FileEdit } from 'lucide-react'
+import { FileText, Link, Type, Download, Loader2, CheckCircle, AlertCircle, RotateCcw, FileEdit } from 'lucide-react'
 import { saveHistoryItem, updateHistoryItem } from '@/lib/history'
 import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { useNavigate } from 'react-router-dom'
@@ -140,16 +140,6 @@ SELF-CHECK BEFORE OUTPUT (internal only):
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'application/pdf') {
-      setResumeFile(file)
-      setSelectedResume(null)
-      setError(null)
-    } else {
-      setError('Please select a PDF file')
-    }
-  }
 
   const parseResume = async (file: File): Promise<ParsedResume> => {
     const formData = new FormData()

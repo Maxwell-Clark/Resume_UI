@@ -4,10 +4,13 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Upload, FileText, Link, Type, Loader2, CheckCircle, AlertCircle, TrendingUp, ThumbsUp, AlertTriangle } from 'lucide-react'
+import { FileText, Link, Type, Loader2, CheckCircle, AlertCircle, TrendingUp, ThumbsUp, AlertTriangle, RefreshCw } from 'lucide-react'
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
 import { ResumeSelectionDialog, type ResumeSelectionResult } from '@/components/ResumeSelectionDialog'
 import { type Resume } from '@/services/resume'
+import { useNavigate } from 'react-router-dom'
+import { saveHistoryItem, updateHistoryItem } from '@/lib/history'
+import { useNotifications } from '@/contexts/NotificationContext'
 
 interface ParsedResume {
   person: any
@@ -32,6 +35,17 @@ interface MatchResponse {
   recommendations: string[]
 }
 
+interface TailorResponse {
+  storage: {
+    url?: string
+    signed_url?: string
+    path: string
+    bucket: string
+  }
+  format: string
+  note?: string
+}
+
 export function ResumeMatchPage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
@@ -42,10 +56,17 @@ export function ResumeMatchPage() {
   // Processing states
   const [isProcessing, setIsProcessing] = useState(false)
   // Store parsed data for potential future use or display
-  const [, setParsedResume] = useState<ParsedResume | null>(null)
-  const [, setParsedJob] = useState<JobData | null>(null)
+  const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null)
+  const [parsedJob, setParsedJob] = useState<JobData | null>(null)
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  // Retailoring states
+  const [isRetailoring, setIsRetailoring] = useState(false)
+  const [retailorHistoryId, setRetailorHistoryId] = useState<string | null>(null)
+  
+  const navigate = useNavigate()
+  const { addNotification } = useNotifications()
 
   const handleResumeSelection = (result: ResumeSelectionResult) => {
     if (result.type === 'existing') {
@@ -56,17 +77,6 @@ export function ResumeMatchPage() {
       setResumeFile(result.file)
       setSelectedResume(null)
       setError(null)
-    }
-  }
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'application/pdf') {
-      setResumeFile(file)
-      setSelectedResume(null)
-      setError(null)
-    } else {
-      setError('Please select a PDF file')
     }
   }
 
@@ -176,6 +186,194 @@ export function ResumeMatchPage() {
     if (percentage >= 80) return 'text-green-600 dark:text-green-400'
     if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400'
     return 'text-red-600 dark:text-red-400'
+  }
+
+  const defaultPrompt = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
+
+STRATEGIC ANALYSIS:
+- Extract the top 10 job-critical terms from the JD (skills, tools, methods, responsibilities, outcomes).
+- Build an internal TRANSFERABILITY MAP that pairs each JD term to the closest evidence in the resume using this ladder:
+  TIER 1: Exact match (same tool/method appears in resume).
+  TIER 2: Synonym/near-equivalent supported by resume (e.g., 'financial modeling' ↔ 'forecasting/variance models in Excel').
+  TIER 3: Parent/neutral concept supported by resume (e.g., 'valuation' ↔ 'financial analysis'; 'DevOps' ↔ 'automation/monitoring').
+- Use only terms that can be justified by TIER 1–3 evidence. If no evidence exists, omit the JD term.
+
+TRUTH & SCOPE GUARDRAILS:
+- Preserve employers, titles, dates, locations, and metrics exactly. Do not add new employers/titles/dates.
+- Do not add tools, certifications, or frameworks that are not in the resume. Use broader parent terms instead (TIER 3) when needed.
+- You may rewrite text fields only: summary, work[].highlights, projects[].highlights, and reorder skills[].keywords.
+- If a section/field is missing in the input, leave it missing.
+
+BULLET STYLE (ATS):
+- One sentence each, 10–22 words, start with a strong verb, end with a period, plain ASCII.
+- Present tense for current role; past tense for previous roles.
+- Include 1–2 JD-aligned terms per bullet from the TRANSFERABILITY MAP (avoid stuffing).
+- Keep numbers/units exactly as in the resume; never invent metrics.
+- Remove filler and duplicates; prefer outcomes, scale, ownership, quality, compliance, or speed.
+
+WHAT TO SURFACE (DOMAIN-AGNOSTIC):
+- Ownership and scope (end-to-end delivery, accountability, deadlines, stakeholders).
+- Scale/throughput/volume (transactions, clients, reports, patients, campaigns, etc.).
+- Methods/tools the JD cares about (only if present; otherwise use parent terms: analysis, automation, reporting, controls, documentation, testing, compliance).
+- Cross-functional collaboration (finance, ops, product, legal, clinicians, sales, etc.).
+- Performance/quality improvements (latency, accuracy, error rate, audit readiness, customer satisfaction, on-time delivery).
+
+SKILLS SECTION:
+- Reorder to place JD-relevant skills first. Group logically (Languages/Tools/Methods/Platforms).
+- Ensure any tool/method mentioned in bullets appears in skills[].keywords. Do not add skills not in the resume; use parent terms instead.
+- Remove stray sentences; keep skills as nouns/phrases only.
+
+HYGIENE:
+- Move location strings (e.g., 'Remote – City, ST') into the location field, not bullets.
+- Ensure each work entry has 2–6 bullets (rewrite/merge existing content to reach at least 2 without invention).
+- Preserve section order and all non-text fields.
+
+SELF-CHECK BEFORE OUTPUT (internal only):
+- Validate JSON against schema. No extra text outside JSON.
+- Verify every bullet follows length/tense/period rules and uses only TIER 1–3 mapped terms.
+- Confirm no new tools/titles/dates/certs were introduced.`
+
+  const generateRetailorPrompt = (matchResult: MatchResponse): string => {
+    const gapsText = matchResult.gaps.length > 0
+      ? `\n- The following gaps were identified:\n${matchResult.gaps.map(gap => `  • ${gap}`).join('\n')}`
+      : '\n- No significant gaps were identified.'
+
+    const recommendationsText = matchResult.recommendations.length > 0
+      ? `\n- Recommended improvements:\n${matchResult.recommendations.map((rec, idx) => `  ${idx + 1}. ${rec}`).join('\n')}`
+      : '\n- No specific recommendations provided.'
+
+    return `${defaultPrompt}
+
+MATCH ANALYSIS RESULTS:
+The resume was analyzed against the job description and achieved a ${matchResult.match_percentage}% match score.${gapsText}${recommendationsText}
+
+PRIORITY FOCUS:
+- Address the identified gaps by incorporating relevant skills, experiences, or achievements that align with the job requirements.
+- Prioritize improvements that will increase the match score while maintaining truth and accuracy.
+- Emphasize the recommended improvements in the resume tailoring process.
+- Focus on bridging the gap between current resume content and job requirements through strategic rewording and emphasis.`
+  }
+
+  const tailorResume = async (resume: ParsedResume, job: JobData, file_name: string, historyId?: string | null, customPrompt?: string): Promise<TailorResponse> => {
+    const payload = {
+      resume_jsonresume: resume,
+      job_json: job,
+      ...(customPrompt && { custom_prompt: customPrompt })
+    }
+
+    // Build query parameters
+    const params = new URLSearchParams({
+      format: 'pdf',
+      store: 'true',
+      bucket: 'resumes',
+      filename: file_name
+    })
+    
+    // Add history_id if provided
+    if (historyId) {
+      params.append('history_id', historyId)
+    }
+
+    const response = await authenticatedFetch(`/tailor?${params.toString()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    return await handleApiResponse<TailorResponse>(response)
+  }
+
+  const handleRetailor = async () => {
+    if (!parsedResume || !parsedJob || !matchResult) {
+      setError('Resume and job data are required for retailoring')
+      return
+    }
+
+    setIsRetailoring(true)
+    setError(null)
+
+    try {
+      // Generate custom prompt from match results
+      const customPrompt = generateRetailorPrompt(matchResult)
+      console.log('Generated retailor prompt:', customPrompt)
+
+      // Create history entry immediately with "tailoring" status
+      console.log('Creating history entry for retailor...')
+      const historyItem = await saveHistoryItem({
+        file_name: `Retailored_Resume_${parsedJob.title || 'Position'}`,
+        job_title: parsedJob.title || 'Unknown Position',
+        company: parsedJob.company || 'Unknown Company',
+        original_resume_name: selectedResume?.name || resumeFile?.name || 'Resume',
+        status: 'tailoring',
+      })
+      setRetailorHistoryId(historyItem.id)
+      console.log('History entry created:', historyItem)
+
+      // Store the history ID in localStorage so HistoryPage can track it
+      localStorage.setItem('pending_tailoring_id', historyItem.id)
+
+      // Navigate to history page immediately
+      navigate('/history', { 
+        state: { forceRefresh: true, newHistoryId: historyItem.id },
+        replace: false
+      })
+
+      // Add info notification that processing started
+      addNotification({
+        title: 'Retailoring Started',
+        message: `We're retailoring your resume based on the match analysis. You'll be notified when it's ready.`,
+        type: 'info'
+      })
+
+      // Tailor resume with custom prompt
+      console.log('Retailoring resume...')
+      const result = await tailorResume(
+        parsedResume,
+        parsedJob,
+        `Retailored_Resume_${parsedJob.title || 'Position'}`,
+        historyItem.id,
+        customPrompt
+      )
+      console.log('Resume retailored:', result)
+
+      // History entry is automatically updated by the backend, but we can still update status_dates if needed
+      try {
+        await updateHistoryItem(historyItem.id, {
+          status: 'complete',
+        })
+      } catch (updateError) {
+        // Backend should have already updated it, so this is just a fallback
+        console.warn('Frontend history update failed (backend may have already updated):', updateError)
+      }
+
+      setRetailorHistoryId(null)
+    } catch (err) {
+      console.error('Retailoring failed:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.')
+      
+      // Add error notification
+      addNotification({
+        title: 'Retailoring Failed',
+        message: err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.',
+        type: 'error'
+      })
+      
+      // Update history entry status to failed if we have a history ID
+      if (retailorHistoryId) {
+        try {
+          await updateHistoryItem(retailorHistoryId, {
+            status: 'failed',
+          })
+        } catch (updateError) {
+          console.error('Failed to update history status:', updateError)
+        }
+        setRetailorHistoryId(null)
+      }
+    } finally {
+      setIsRetailoring(false)
+    }
   }
 
   return (
@@ -382,6 +580,35 @@ export function ResumeMatchPage() {
                   ))}
                 </ul>
               </div>
+            </div>
+
+            {/* Retailor Button */}
+            <div className="mt-8 pt-6 border-t dark:border-slate-700">
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleRetailor}
+                  disabled={isRetailoring || !parsedResume || !parsedJob}
+                  className="px-8 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
+                  size="lg"
+                >
+                  {isRetailoring ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Retailoring...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-5 w-5" />
+                      Retailor Resume
+                    </>
+                  )}
+                </Button>
+              </div>
+              {parsedResume && parsedJob && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 text-center mt-3">
+                  Tailor your resume using the match analysis recommendations to improve your match score.
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -60,7 +60,13 @@ export function Popover({
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
   const isControlled = openProp !== undefined;
   const open = isControlled ? !!openProp : uncontrolledOpen;
-  const setOpen = (v: boolean) => (isControlled ? onOpenChange?.(v) : setUncontrolledOpen(v));
+  const setOpen = React.useCallback((v: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(v);
+    } else {
+      setUncontrolledOpen(v);
+    }
+  }, [isControlled, onOpenChange]);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -76,7 +82,7 @@ export function Popover({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, closeOnEsc]);
+  }, [open, closeOnEsc, setOpen]);
 
   // Outside click
   React.useEffect(() => {
@@ -89,7 +95,7 @@ export function Popover({
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open, closeOnOutsideClick]);
+  }, [open, closeOnOutsideClick, setOpen]);
 
   // Simple positioning using the trigger rect
   const [styles, setStyles] = React.useState<React.CSSProperties>({});

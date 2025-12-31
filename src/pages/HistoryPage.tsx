@@ -319,7 +319,7 @@ export function HistoryPage() {
     if (navState?.forceRefresh) {
       window.history.replaceState({}, '', location.pathname)
     }
-  }, [loadInitialHistory, location.pathname])
+  }, [loadInitialHistory, location.pathname, location.state])
 
   // Poll for status updates on items with 'tailoring' status
   useEffect(() => {

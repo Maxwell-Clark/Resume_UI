@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { resumeService } from '@/services/resume'
 import type { Resume } from '@/services/resume'
@@ -72,15 +72,7 @@ export function ResumeEditorPage() {
   const [projects, setProjects] = useState<ProjectEntry[]>([])
   const [certifications, setCertifications] = useState<CertificationEntry[]>([])
 
-  useEffect(() => {
-    if (id) {
-      loadResume(id)
-    } else {
-      loadLatestResume()
-    }
-  }, [id])
-
-  const loadLatestResume = async () => {
+  const loadLatestResume = useCallback(async () => {
     try {
       setLoading(true)
       const resumes = await resumeService.getResumes(1)
@@ -95,7 +87,15 @@ export function ResumeEditorPage() {
       console.error(err)
       setLoading(false)
     }
-  }
+  }, [navigate])
+
+  useEffect(() => {
+    if (id) {
+      loadResume(id)
+    } else {
+      loadLatestResume()
+    }
+  }, [id, loadLatestResume])
 
   const loadResume = async (resumeId: string) => {
     try {

@@ -39,7 +39,6 @@ export function Dialog({
   container,
 }: DialogProps) {
   const [mounted, setMounted] = React.useState(false)
-  const dialogRef = React.useRef<HTMLDivElement>(null)
   const contentRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => setMounted(true), [])
