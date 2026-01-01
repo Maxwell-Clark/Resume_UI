@@ -581,7 +581,7 @@ export function HistoryPage() {
         ) : (
           <>
             {currentPageItems.map((item) => (
-            <div key={item.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+                <div key={item.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">

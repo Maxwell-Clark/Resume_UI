@@ -99,6 +99,31 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
   }
 }
 
+export async function getHistoryItemByResumeId(resume_id: string): Promise<HistoryItem | null> {
+  try {
+    const response = await authenticatedFetch(`/history/resume/${resume_id}`)
+    
+    if (response.status === 404) return null
+    
+    const item = await handleApiResponse<HistoryItem>(response)
+    return {
+      id: item.id.toString(),
+      file_name: item.file_name,
+      job_title: item.job_title,
+      company: item.company,
+      download_url: item.download_url,
+      original_resume_name: item.original_resume_name,
+      status: item.status || 'tailoring',
+      status_dates: item.status_dates || {},
+      created_at: item.created_at,
+      resume_id: item.resume_id,
+    }
+  } catch (error) {
+    console.error('Error fetching history item by resume_id:', error)
+    return null
+  }
+}
+
 export async function updateHistoryItem(
   id: string, 
   updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates'>>

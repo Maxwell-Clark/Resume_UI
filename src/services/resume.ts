@@ -73,5 +73,46 @@ export const resumeService = {
     })
     return handleApiResponse<void>(response)
   },
+
+  /**
+   * Convert resume content to PDF
+   */
+  async convertResumeToPdf(content: Record<string, unknown>, filename?: string): Promise<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }> {
+    const params = new URLSearchParams({
+      format: 'pdf',
+      store: 'true',
+      bucket: 'resumes',
+    })
+    
+    if (filename) {
+      params.append('filename', filename)
+    }
+
+    const response = await authenticatedFetch(`/convert?${params.toString()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(content),
+    })
+    
+    return handleApiResponse<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }>(response)
+  },
+
+  /**
+   * Edit text using AI
+   */
+  async editText(text: string, instruction: string): Promise<string> {
+    const response = await authenticatedFetch('/edit-text', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text, instruction }),
+    })
+    
+    const result = await handleApiResponse<{ edited_text: string }>(response)
+    return result.edited_text
+  },
 }
 

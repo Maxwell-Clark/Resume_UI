@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { resumeService } from '@/services/resume'
 import type { Resume } from '@/services/resume'
+import { getHistoryItemByResumeId, updateHistoryItem } from '@/lib/history'
+import { useNotifications } from '@/contexts/NotificationContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles } from 'lucide-react'
+import { AIEditDialog } from '@/components/AIEditDialog'
 
 // Type definitions
 type WorkEntry = {
@@ -52,6 +55,7 @@ type CertificationEntry = {
 export function ResumeEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { addNotification } = useNotifications()
   const [resume, setResume] = useState<Resume | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -71,6 +75,19 @@ export function ResumeEditorPage() {
   const [skills, setSkills] = useState<SkillCategory[]>([])
   const [projects, setProjects] = useState<ProjectEntry[]>([])
   const [certifications, setCertifications] = useState<CertificationEntry[]>([])
+
+  // AI Edit Dialog state
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [editingField, setEditingField] = useState<{
+    type: 'basics_summary' | 'work_summary' | 'work_highlight' | 'education_detail' | 'project_description' | 'project_highlight'
+    workIndex?: number
+    highlightIndex?: number
+    educationIndex?: number
+    detailIndex?: number
+    projectIndex?: number
+    fieldLabel: string
+    currentText: string
+  } | null>(null)
 
   const loadLatestResume = useCallback(async () => {
     try {
@@ -217,71 +234,148 @@ export function ResumeEditorPage() {
     try {
       setSaving(true)
       
-      const updatedContent: any = { ...resume.content }
+      // Build updatedContent from scratch using only form data
+      // Don't copy original content to avoid including fields not in the form
+      const updatedContent: any = {}
       
-      // Update basics
-      if (updatedContent.basics) {
-        updatedContent.basics = {
-          ...(updatedContent.basics as object),
-          ...basics
-        }
-      } else {
-        updatedContent.basics = basics
+      // Update basics - only include non-empty fields, but ensure name exists
+      updatedContent.basics = {}
+      // Name is required - always set it, default to 'Resume' if empty
+      const nameValue = basics.name?.trim() || 'Resume'
+      updatedContent.basics.name = nameValue
+      if (basics.email?.trim()) updatedContent.basics.email = basics.email.trim()
+      if (basics.phone?.trim()) updatedContent.basics.phone = basics.phone.trim()
+      if (basics.location?.trim()) updatedContent.basics.location = basics.location.trim()
+      if (basics.website?.trim()) updatedContent.basics.website = basics.website.trim()
+      if (basics.summary?.trim()) updatedContent.basics.summary = basics.summary.trim()
+
+      // Update work - filter out empty entries and ensure valid structure
+      const validWork = work
+        .filter(w => w.name && w.position) // Only include entries with name and position
+        .map(w => ({
+          name: w.name,
+          position: w.position,
+          ...(w.location && { location: w.location }),
+          ...(w.startDate && { startDate: w.startDate }),
+          ...(w.endDate && { endDate: w.endDate }),
+          ...(w.summary && { summary: w.summary }),
+          highlights: w.highlights.filter(h => h.trim()).filter(h => h.length > 0) // Remove empty highlights
+        }))
+      if (validWork.length > 0) {
+        updatedContent.work = validWork
       }
 
-      // Update work
-      updatedContent.work = work.map(w => ({
-        name: w.name,
-        position: w.position,
-        ...(w.location && { location: w.location }),
-        ...(w.startDate && { startDate: w.startDate }),
-        ...(w.endDate && { endDate: w.endDate }),
-        ...(w.summary && { summary: w.summary }),
-        highlights: w.highlights.filter(h => h.trim())
-      }))
+      // Update education - filter out empty entries
+      const validEducation = education
+        .filter(e => e.institution) // Only include entries with institution
+        .map(e => ({
+          institution: e.institution,
+          ...(e.studyType && { studyType: e.studyType }),
+          ...(e.area && { area: e.area }),
+          ...(e.startDate && { startDate: e.startDate }),
+          ...(e.endDate && { endDate: e.endDate }),
+          ...(e.gpa && { gpa: e.gpa }),
+          details: e.details.filter(d => d.trim()).filter(d => d.length > 0) // Remove empty details
+        }))
+      if (validEducation.length > 0) {
+        updatedContent.education = validEducation
+      }
 
-      // Update education
-      updatedContent.education = education.map(e => ({
-        institution: e.institution,
-        ...(e.studyType && { studyType: e.studyType }),
-        ...(e.area && { area: e.area }),
-        ...(e.startDate && { startDate: e.startDate }),
-        ...(e.endDate && { endDate: e.endDate }),
-        ...(e.gpa && { gpa: e.gpa }),
-        details: e.details.filter(d => d.trim())
-      }))
+      // Update skills - filter out empty entries
+      const validSkills = skills
+        .filter(s => s.name && s.keywords.length > 0) // Only include categories with name and keywords
+        .map(s => ({
+          name: s.name,
+          keywords: s.keywords.filter(k => k.trim()).filter(k => k.length > 0) // Remove empty keywords
+        }))
+      if (validSkills.length > 0) {
+        updatedContent.skills = validSkills
+      }
 
-      // Update skills
-      updatedContent.skills = skills.map(s => ({
-        name: s.name,
-        keywords: s.keywords.filter(k => k.trim())
-      }))
+      // Update projects - filter out empty entries
+      const validProjects = projects
+        .filter(p => p.name) // Only include entries with name
+        .map(p => ({
+          name: p.name,
+          ...(p.description && { description: p.description }),
+          ...(p.url && { url: p.url }),
+          ...(p.startDate && { startDate: p.startDate }),
+          ...(p.endDate && { endDate: p.endDate }),
+          highlights: p.highlights.filter(h => h.trim()).filter(h => h.length > 0) // Remove empty highlights
+        }))
+      if (validProjects.length > 0) {
+        updatedContent.projects = validProjects
+      }
 
-      // Update projects
-      updatedContent.projects = projects.map(p => ({
-        name: p.name,
-        ...(p.description && { description: p.description }),
-        ...(p.url && { url: p.url }),
-        ...(p.startDate && { startDate: p.startDate }),
-        ...(p.endDate && { endDate: p.endDate }),
-        highlights: p.highlights.filter(h => h.trim())
-      }))
-
-      // Update certifications
-      updatedContent.certifications = certifications.map(c => ({
-        name: c.name,
-        ...(c.issuer && { issuer: c.issuer }),
-        ...(c.date && { date: c.date })
-      }))
+      // Update certifications - filter out empty entries
+      const validCertifications = certifications
+        .filter(c => c.name) // Only include entries with name
+        .map(c => ({
+          name: c.name,
+          ...(c.issuer && { issuer: c.issuer }),
+          ...(c.date && { date: c.date })
+        }))
+      if (validCertifications.length > 0) {
+        updatedContent.certifications = validCertifications
+      }
 
       await resumeService.updateResume(id, {
         content: updatedContent
       })
+
+      // Regenerate PDF and update history entry if it exists
+      // IMPORTANT: Do this BEFORE loadResume to avoid state overwrite issues
+      try {
+        // Find associated history entry
+        const historyItem = await getHistoryItemByResumeId(id)
+        
+        // Convert resume to PDF using the updatedContent we just saved
+        const convertResult = await resumeService.convertResumeToPdf(
+          updatedContent,
+          historyItem?.file_name || resume.name
+        )
+        
+        // Update history entry with new download URL if it exists
+        if (historyItem) {
+          const newDownloadUrl = convertResult.storage.public_url || convertResult.storage.url
+          
+          await updateHistoryItem(historyItem.id, {
+            download_url: newDownloadUrl
+          })
+          
+          addNotification({
+            title: 'Resume Updated',
+            message: 'Your resume has been saved and regenerated. The new PDF is available in your history.',
+            type: 'success'
+          })
+        } else {
+          // No history entry, but PDF was still generated
+          addNotification({
+            title: 'Resume Saved',
+            message: 'Your resume has been saved successfully.',
+            type: 'success'
+          })
+        }
+      } catch (convertErr) {
+        // Don't block save operation if convert fails
+        console.error('Failed to regenerate PDF:', convertErr)
+        addNotification({
+          title: 'Resume Saved',
+          message: 'Your resume has been saved, but PDF regeneration failed. You can try again later.',
+          type: 'warning'
+        })
+      }
       
+      // Reload resume from DB after PDF generation to sync UI state
       await loadResume(id)
     } catch (err) {
       setError('Failed to save resume')
       console.error(err)
+      addNotification({
+        title: 'Save Failed',
+        message: 'Failed to save resume. Please try again.',
+        type: 'error'
+      })
     } finally {
       setSaving(false)
     }
@@ -430,6 +524,88 @@ export function ResumeEditorPage() {
     setCertifications(certifications.filter((_, i) => i !== index))
   }
 
+  // AI Edit handlers
+  const handleAIEdit = (
+    type: 'basics_summary' | 'work_summary' | 'work_highlight' | 'education_detail' | 'project_description' | 'project_highlight',
+    fieldLabel: string,
+    currentText: string,
+    workIndex?: number,
+    highlightIndex?: number,
+    educationIndex?: number,
+    detailIndex?: number,
+    projectIndex?: number
+  ) => {
+    setEditingField({
+      type,
+      workIndex,
+      highlightIndex,
+      educationIndex,
+      detailIndex,
+      projectIndex,
+      fieldLabel,
+      currentText: currentText || ''
+    })
+    setAiDialogOpen(true)
+  }
+
+  const handleAIEditApply = (editedText: string) => {
+    if (!editingField) return
+
+    switch (editingField.type) {
+      case 'basics_summary':
+        setBasics({ ...basics, summary: editedText })
+        break
+      
+      case 'work_summary':
+        if (editingField.workIndex !== undefined) {
+          const updated = [...work]
+          updated[editingField.workIndex] = {
+            ...updated[editingField.workIndex],
+            summary: editedText
+          }
+          setWork(updated)
+        }
+        break
+      
+      case 'work_highlight':
+        if (editingField.workIndex !== undefined && editingField.highlightIndex !== undefined) {
+          const updated = [...work]
+          updated[editingField.workIndex].highlights[editingField.highlightIndex] = editedText
+          setWork(updated)
+        }
+        break
+      
+      case 'education_detail':
+        if (editingField.educationIndex !== undefined && editingField.detailIndex !== undefined) {
+          const updated = [...education]
+          updated[editingField.educationIndex].details[editingField.detailIndex] = editedText
+          setEducation(updated)
+        }
+        break
+      
+      case 'project_description':
+        if (editingField.projectIndex !== undefined) {
+          const updated = [...projects]
+          updated[editingField.projectIndex] = {
+            ...updated[editingField.projectIndex],
+            description: editedText
+          }
+          setProjects(updated)
+        }
+        break
+      
+      case 'project_highlight':
+        if (editingField.projectIndex !== undefined && editingField.highlightIndex !== undefined) {
+          const updated = [...projects]
+          updated[editingField.projectIndex].highlights[editingField.highlightIndex] = editedText
+          setProjects(updated)
+        }
+        break
+    }
+
+    setEditingField(null)
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -522,7 +698,18 @@ export function ResumeEditorPage() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="summary">Professional Summary</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="summary">Professional Summary</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleAIEdit('basics_summary', 'Professional Summary', basics.summary)}
+                  className="h-8 px-2"
+                >
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  AI Edit
+                </Button>
+              </div>
               <Textarea
                 id="summary"
                 rows={4}
@@ -598,7 +785,18 @@ export function ResumeEditorPage() {
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Summary</Label>
+                      <div className="flex items-center justify-between">
+                        <Label>Summary</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAIEdit('work_summary', `Work Summary - ${entry.name}`, entry.summary || '', index)}
+                          className="h-8 px-2"
+                        >
+                          <Sparkles className="h-4 w-4 mr-1" />
+                          AI Edit
+                        </Button>
+                      </div>
                       <Textarea
                         value={entry.summary || ''}
                         onChange={(e) => updateWorkEntry(index, 'summary', e.target.value)}
@@ -621,6 +819,15 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateHighlight(index, hIndex, e.target.value)}
                           placeholder="Bullet point"
                         />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAIEdit('work_highlight', `Work Highlight - ${entry.name}`, highlight, index, hIndex)}
+                          className="h-8 px-2"
+                          title="AI Edit"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => removeHighlight(index, hIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -720,6 +927,15 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateEducationDetail(index, dIndex, e.target.value)}
                           placeholder="Coursework, honors, thesis, etc."
                         />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAIEdit('education_detail', `Education Detail - ${entry.institution}`, detail, undefined, undefined, index, dIndex)}
+                          className="h-8 px-2"
+                          title="AI Edit"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => removeEducationDetail(index, dIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -845,7 +1061,18 @@ export function ResumeEditorPage() {
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Description</Label>
+                      <div className="flex items-center justify-between">
+                        <Label>Description</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAIEdit('project_description', `Project Description - ${entry.name}`, entry.description || '', undefined, undefined, undefined, undefined, index)}
+                          className="h-8 px-2"
+                        >
+                          <Sparkles className="h-4 w-4 mr-1" />
+                          AI Edit
+                        </Button>
+                      </div>
                       <Textarea
                         value={entry.description || ''}
                         onChange={(e) => updateProjectEntry(index, 'description', e.target.value)}
@@ -868,6 +1095,15 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateProjectHighlight(index, hIndex, e.target.value)}
                           placeholder="Bullet point"
                         />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAIEdit('project_highlight', `Project Highlight - ${entry.name}`, highlight, undefined, hIndex, undefined, undefined, index)}
+                          className="h-8 px-2"
+                          title="AI Edit"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => removeProjectHighlight(index, hIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -956,6 +1192,17 @@ export function ResumeEditorPage() {
           </Button>
         </div>
       </div>
+
+      {/* AI Edit Dialog */}
+      {editingField && (
+        <AIEditDialog
+          open={aiDialogOpen}
+          onOpenChange={setAiDialogOpen}
+          originalText={editingField.currentText}
+          fieldLabel={editingField.fieldLabel}
+          onApply={handleAIEditApply}
+        />
+      )}
     </div>
   )
 }

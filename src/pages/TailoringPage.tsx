@@ -173,17 +173,11 @@ SELF-CHECK BEFORE OUTPUT (internal only):
   }
 
   const tailorResume = async (resume: ParsedResume, job: JobData, file_name: string, historyId?: string | null, customPrompt?: string): Promise<TailorResponse> => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TailoringPage.tsx:168',message:'tailorResume called',data:{hasCustomPrompt:!!customPrompt,promptLength:customPrompt?.length||0,promptPreview:customPrompt?.substring(0,100)||'none'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const payload = {
       resume_jsonresume: resume,
       job_json: job,
       ...(customPrompt && { custom_prompt: customPrompt })
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TailoringPage.tsx:175',message:'Payload created',data:{hasCustomPrompt:!!payload.custom_prompt,payloadKeys:Object.keys(payload)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
 
     // Build query parameters
     const params = new URLSearchParams({
