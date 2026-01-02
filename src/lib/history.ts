@@ -126,7 +126,7 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
 
 export async function updateHistoryItem(
   id: string, 
-  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates'>>
+  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name'>>
 ): Promise<HistoryItem> {
   try {
     const response = await authenticatedFetch(`/history/${id}`, {

@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { resumeService } from '@/services/resume'
 import type { Resume } from '@/services/resume'
-import { getHistoryItemByResumeId, updateHistoryItem } from '@/lib/history'
+import { getHistoryItemByResumeId, updateHistoryItem, type HistoryItem } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download } from 'lucide-react'
 import { AIEditDialog } from '@/components/AIEditDialog'
 
 // Type definitions
@@ -76,6 +76,12 @@ export function ResumeEditorPage() {
   const [projects, setProjects] = useState<ProjectEntry[]>([])
   const [certifications, setCertifications] = useState<CertificationEntry[]>([])
 
+  // Resume name and history state
+  const [resumeName, setResumeName] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editingNameValue, setEditingNameValue] = useState('')
+  const [historyItem, setHistoryItem] = useState<HistoryItem | null>(null)
+
   // AI Edit Dialog state
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [editingField, setEditingField] = useState<{
@@ -120,6 +126,16 @@ export function ResumeEditorPage() {
       const data = await resumeService.getResume(resumeId)
       setResume(data)
       setError(null)
+      
+      // Load history item and set default name
+      const history = await getHistoryItemByResumeId(resumeId)
+      setHistoryItem(history)
+      
+      // Set resume name with default logic
+      // Prefer history file_name if it exists, otherwise use resume name
+      let nameToUse = history?.file_name || data.name
+      
+      setResumeName(nameToUse)
       
       if (data.content) {
         const content = data.content
@@ -319,28 +335,38 @@ export function ResumeEditorPage() {
         updatedContent.certifications = validCertifications
       }
 
+      // Update resume name if it changed
       await resumeService.updateResume(id, {
+        name: resumeName,
         content: updatedContent
       })
 
       // Regenerate PDF and update history entry if it exists
       // IMPORTANT: Do this BEFORE loadResume to avoid state overwrite issues
       try {
-        // Find associated history entry
-        const historyItem = await getHistoryItemByResumeId(id)
+        // Find associated history entry (use state if available, otherwise fetch)
+        const currentHistoryItem = historyItem || await getHistoryItemByResumeId(id)
         
         // Convert resume to PDF using the updatedContent we just saved
         const convertResult = await resumeService.convertResumeToPdf(
           updatedContent,
-          historyItem?.file_name || resume.name
+          resumeName
         )
         
-        // Update history entry with new download URL if it exists
-        if (historyItem) {
+        // Update history entry with new download URL and file_name if it exists
+        if (currentHistoryItem) {
           const newDownloadUrl = convertResult.storage.public_url || convertResult.storage.url
           
-          await updateHistoryItem(historyItem.id, {
-            download_url: newDownloadUrl
+          await updateHistoryItem(currentHistoryItem.id, {
+            download_url: newDownloadUrl,
+            file_name: resumeName
+          })
+          
+          // Update local state
+          setHistoryItem({
+            ...currentHistoryItem,
+            download_url: newDownloadUrl,
+            file_name: resumeName
           })
           
           addNotification({
@@ -641,10 +667,100 @@ export function ResumeEditorPage() {
           </Button>
         </div>
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Edit Resume</h1>
+          <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Edit {resumeName || resume.name}</h1>
           <p className="text-slate-600 dark:text-slate-400">
-            {resume.name} • Last updated: {new Date(resume.updated_at).toLocaleDateString()}
+            Last updated: {new Date(resume.updated_at).toLocaleDateString()}
           </p>
+        </div>
+      </div>
+
+      {/* Top Toolbar */}
+      <div className="mb-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Resume Name Editor */}
+          <div className="flex items-center gap-2 flex-1">
+            {isEditingName ? (
+              <div className="flex items-center gap-2 flex-1">
+                <Input
+                  value={editingNameValue}
+                  onChange={(e) => setEditingNameValue(e.target.value)}
+                  onBlur={() => {
+                    setResumeName(editingNameValue)
+                    setIsEditingName(false)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setResumeName(editingNameValue)
+                      setIsEditingName(false)
+                    } else if (e.key === 'Escape') {
+                      setEditingNameValue(resumeName)
+                      setIsEditingName(false)
+                    }
+                  }}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setResumeName(editingNameValue)
+                    setIsEditingName(false)
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-1">
+                <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  {resumeName || resume.name}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditingNameValue(resumeName || resume.name)
+                    setIsEditingName(true)
+                  }}
+                  className="h-8 w-8 p-0"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {historyItem?.download_url && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(historyItem.download_url, '_blank')}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </Button>
+            )}
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
