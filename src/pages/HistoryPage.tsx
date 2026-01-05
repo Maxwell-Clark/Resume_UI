@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Popover } from '@/components/ui/popover'
 import { ConfirmationDialog } from '@/components/ui/dialog'
 import { getHistoryItems, updateHistoryItem, deleteHistoryItem, saveHistoryCache, loadHistoryCache, type HistoryItem } from '@/lib/history'
@@ -159,6 +160,9 @@ const StatusBadge = ({
   )
 }
 
+// All possible statuses for filtering
+const allStatuses: HistoryItem['status'][] = ['tailoring', 'tailored', 'applied', 'interviewing', 'rejected', 'ghosted', 'hired', 'complete', 'failed']
+
 export function HistoryPage() {
   const [cachedRanges, setCachedRanges] = useState<Map<string, HistoryItem[]>>(new Map())
   const [currentPage, setCurrentPage] = useState(1)
@@ -169,6 +173,9 @@ export function HistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<HistoryItem['status'] | 'all'>('all')
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const cachedRangesRef = useRef<Map<string, HistoryItem[]>>(new Map())
@@ -200,24 +207,48 @@ export function HistoryPage() {
     return items
   }, [cachedRanges])
 
-  // Get items for current page
+  // Filter items by search query and status
+  const filteredItems = useMemo(() => {
+    let items = getAllCachedItems
+    
+    // Filter by search query (searches file_name, job_title, company)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      items = items.filter(item => 
+        item.file_name?.toLowerCase().includes(query) ||
+        item.job_title?.toLowerCase().includes(query) ||
+        item.company?.toLowerCase().includes(query)
+      )
+    }
+    
+    // Filter by status
+    if (statusFilter !== 'all') {
+      items = items.filter(item => item.status === statusFilter)
+    }
+    
+    return items
+  }, [getAllCachedItems, searchQuery, statusFilter])
+
+  // Get items for current page (from filtered items)
   const currentPageItems = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
-    return getAllCachedItems.slice(startIndex, endIndex)
-  }, [getAllCachedItems, currentPage])
+    return filteredItems.slice(startIndex, endIndex)
+  }, [filteredItems, currentPage])
 
-  // Calculate total pages based on cached items
+  // Calculate total pages based on filtered items
   const totalPages = useMemo(() => {
-    const totalItems = getAllCachedItems.length
-    // If we have a full batch and it's the last page, there might be more
-    // Otherwise, calculate based on what we have
+    const totalItems = filteredItems.length
+    // When filtering, use exact count
+    if (searchQuery.trim() || statusFilter !== 'all') {
+      return Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
+    }
+    // When not filtering, check if there might be more items
     if (hasMoreItems && getAllCachedItems.length > 0 && getAllCachedItems.length % CACHE_BATCH_SIZE === 0) {
-      // We might have more, so add one more page
       return Math.ceil((getAllCachedItems.length + ITEMS_PER_PAGE) / ITEMS_PER_PAGE)
     }
     return Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))
-  }, [getAllCachedItems.length, hasMoreItems])
+  }, [filteredItems.length, getAllCachedItems.length, hasMoreItems, searchQuery, statusFilter])
 
   // Fetch a batch of items
   const fetchBatch = useCallback(async (offset: number, limit: number = CACHE_BATCH_SIZE) => {
@@ -566,6 +597,115 @@ export function HistoryPage() {
         <p className="text-slate-600 dark:text-slate-400">View and download your previously tailored resumes</p>
       </div>
 
+      {/* Search and Filter Controls */}
+      {!isLoading && getAllCachedItems.length > 0 && (
+        <div className="mb-6 flex flex-col sm:flex-row gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              type="text"
+              placeholder="Search by name, job title, or company..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1) // Reset to first page on search
+              }}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setCurrentPage(1)
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Status Filter */}
+          <Popover
+            open={statusFilterOpen}
+            onOpenChange={setStatusFilterOpen}
+            wrapInButton={false}
+            trigger={
+              <Button variant="outline" className="flex items-center min-w-[160px] justify-between">
+                {statusFilter === 'all' ? (
+                  <span className="text-slate-500 dark:text-slate-400">All Statuses</span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    {(() => {
+                      const config = statusConfig[statusFilter]
+                      const Icon = config.icon
+                      return (
+                        <>
+                          <Icon className="h-4 w-4" />
+                          {config.label}
+                        </>
+                      )
+                    })()}
+                  </span>
+                )}
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            }
+            align="end"
+            side="bottom"
+          >
+            <div className="p-1 min-w-[180px]">
+              <button
+                onClick={() => {
+                  setStatusFilter('all')
+                  setStatusFilterOpen(false)
+                  setCurrentPage(1)
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors',
+                  statusFilter === 'all' && 'bg-slate-100 dark:bg-slate-700'
+                )}
+              >
+                <span>All Statuses</span>
+                {statusFilter === 'all' && <CheckCircle className="h-4 w-4 ml-auto" />}
+              </button>
+              {allStatuses.map((status) => {
+                const config = statusConfig[status]
+                const Icon = config.icon
+                return (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      setStatusFilter(status)
+                      setStatusFilterOpen(false)
+                      setCurrentPage(1)
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors',
+                      statusFilter === status && 'bg-slate-100 dark:bg-slate-700'
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{config.label}</span>
+                    {statusFilter === status && <CheckCircle className="h-4 w-4 ml-auto" />}
+                  </button>
+                )
+              })}
+            </div>
+          </Popover>
+        </div>
+      )}
+
+      {/* Results count when filtering */}
+      {!isLoading && (searchQuery.trim() || statusFilter !== 'all') && filteredItems.length > 0 && (
+        <div className="mb-4 text-sm text-slate-600 dark:text-slate-400">
+          Showing {filteredItems.length} {filteredItems.length === 1 ? 'result' : 'results'}
+          {searchQuery.trim() && <span> for "<strong>{searchQuery}</strong>"</span>}
+          {statusFilter !== 'all' && <span> with status <strong>{statusConfig[statusFilter].label}</strong></span>}
+        </div>
+      )}
+
       <div className="space-y-4">
         {isLoading ? (
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
@@ -577,6 +717,24 @@ export function HistoryPage() {
             <History className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No History Yet</h3>
             <p className="text-slate-600 dark:text-slate-400">Your tailored resumes will appear here once you create them.</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
+            <Search className="h-16 w-16 text-slate-400 dark:text-slate-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">No Results Found</h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              No resumes match your search{statusFilter !== 'all' ? ' and filter' : ''} criteria.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery('')
+                setStatusFilter('all')
+                setCurrentPage(1)
+              }}
+            >
+              Clear Filters
+            </Button>
           </div>
         ) : (
           <>

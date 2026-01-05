@@ -133,7 +133,7 @@ export function ResumeEditorPage() {
       
       // Set resume name with default logic
       // Prefer history file_name if it exists, otherwise use resume name
-      let nameToUse = history?.file_name || data.name
+      const nameToUse = history?.file_name || data.name
       
       setResumeName(nameToUse)
       
