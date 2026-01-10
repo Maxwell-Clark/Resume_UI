@@ -52,7 +52,7 @@ const statusConfig: Record<HistoryItem['status'], { label: string; icon: typeof 
     style: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
   },
   complete: {
-    label: 'Complete',
+    label: 'Tailored',
     icon: CheckCircle,
     style: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
   },

@@ -65,8 +65,8 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route element={<ProtectedLayout />}>
             <Route path="studio" element={<ResumeStudioPage />} />
-            <Route path="tailor" element={<Navigate to="/studio?tab=tailor" replace />} />
-            <Route path="match" element={<Navigate to="/studio?tab=match" replace />} />
+            <Route path="tailor" element={<Navigate to="/studio" replace />} />
+            <Route path="match" element={<Navigate to="/studio" replace />} />
             <Route path="editor" element={<ResumeEditorPage />} />
             <Route path="editor/:id" element={<ResumeEditorPage />} />
             <Route path="history" element={<HistoryPage />} />

@@ -323,9 +323,6 @@ export function ResumeEditorPage() {
   }
 
   const handleSave = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:handleSave',message:'handleSave called',data:{id,hasResume:!!resume},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'I'})}).catch(()=>{});
-    // #endregion
     if (!id || !resume) return
 
     try {
@@ -470,16 +467,10 @@ export function ResumeEditorPage() {
       }
 
       // Update resume name if it changed
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:beforeUpdateResume',message:'About to update resume',data:{id,resumeName,contentKeys:Object.keys(updatedContent)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'J'})}).catch(()=>{});
-      // #endregion
       await resumeService.updateResume(id, {
         name: resumeName,
         content: updatedContent
       })
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:afterUpdateResume',message:'Resume updated successfully',data:{id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'K'})}).catch(()=>{});
-      // #endregion
 
       // Regenerate PDF and update history entry if it exists
       // IMPORTANT: Do this BEFORE loadResume to avoid state overwrite issues
@@ -535,9 +526,6 @@ export function ResumeEditorPage() {
       // Reload resume from DB after PDF generation to sync UI state
       await loadResume(id)
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:handleSave:catch',message:'Save failed with error',data:{error:err instanceof Error ? err.message : String(err),errorStack:err instanceof Error ? err.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'L'})}).catch(()=>{});
-      // #endregion
       setError('Failed to save resume')
       console.error(err)
       addNotification({

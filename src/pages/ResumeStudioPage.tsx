@@ -55,7 +55,7 @@ interface MatchResponse {
   recommendations: string[]
 }
 
-type TabType = 'tailor' | 'match' | 'create'
+type TabType = 'studio' | 'create'
 
 const DEFAULT_PROMPT = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
 
@@ -103,9 +103,9 @@ SELF-CHECK BEFORE OUTPUT (internal only):
 - Confirm no new tools/titles/dates/certs were introduced.`
 
 // ============================================================================
-// TAILOR TAB COMPONENT
+// STUDIO TAB COMPONENT (Combined Tailor + Match)
 // ============================================================================
-function TailorTab() {
+function StudioTab() {
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
   const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
@@ -119,7 +119,19 @@ function TailorTab() {
   const [error, setError] = useState<string | null>(null)
   const [filename, setFileName] = useState<string>('Tailored_Resume')
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
-  const navigate = useNavigate()
+  
+  // Match functionality state
+  const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
+  const [isCheckingMatch, setIsCheckingMatch] = useState(false)
+  const [showMatchResults, setShowMatchResults] = useState(false)
+  const [isRetailoring, setIsRetailoring] = useState(false)
+  
+  // Optional fields for history
+  const [jobTitle, setJobTitle] = useState('')
+  const [companyName, setCompanyName] = useState('')
+  const [salaryRange, setSalaryRange] = useState('')
+  const [industry, setIndustry] = useState('')
+  
   const { addNotification } = useNotifications()
 
   useJobStatusPolling(currentHistoryId, (completedItem) => {
@@ -216,6 +228,183 @@ function TailorTab() {
     return await handleApiResponse<TailorResponse>(response)
   }
 
+  const matchResume = async (resume: ParsedResume, job: JobData): Promise<MatchResponse> => {
+    const payload = {
+      resume_jsonresume: resume,
+      job_json: job
+    }
+
+    const response = await authenticatedFetch('/match', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    return await handleApiResponse<MatchResponse>(response)
+  }
+
+  const getMatchColor = (percentage: number) => {
+    if (percentage >= 80) return 'text-green-600 dark:text-green-400'
+    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-red-600 dark:text-red-400'
+  }
+
+  const generateRetailorPrompt = (matchResult: MatchResponse): string => {
+    const gapsText = matchResult.gaps.length > 0
+      ? `\n- The following gaps were identified:\n${matchResult.gaps.map(gap => `  • ${gap}`).join('\n')}`
+      : '\n- No significant gaps were identified.'
+
+    const recommendationsText = matchResult.recommendations.length > 0
+      ? `\n- Recommended improvements:\n${matchResult.recommendations.map((rec, idx) => `  ${idx + 1}. ${rec}`).join('\n')}`
+      : '\n- No specific recommendations provided.'
+
+    return `${DEFAULT_PROMPT}
+
+MATCH ANALYSIS RESULTS:
+The resume was analyzed against the job description and achieved a ${matchResult.match_percentage}% match score.${gapsText}${recommendationsText}
+
+PRIORITY FOCUS:
+- Address the identified gaps by incorporating relevant skills, experiences, or achievements that align with the job requirements.
+- Prioritize improvements that will increase the match score while maintaining truth and accuracy.
+- Emphasize the recommended improvements in the resume tailoring process.
+- Focus on bridging the gap between current resume content and job requirements through strategic rewording and emphasis.`
+  }
+
+  const handleCheckMatch = async () => {
+    if (!resumeFile && !selectedResume) {
+      setError('Please select or upload a resume')
+      return
+    }
+    if (!jobDescription.trim()) {
+      setError('Please provide a job description')
+      return
+    }
+
+    setIsCheckingMatch(true)
+    setError(null)
+    setMatchResult(null)
+
+    try {
+      const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
+      setParsedJob(job)
+      
+      // Pre-fill optional fields from parsed job if not already set
+      if (!jobTitle && job.title) setJobTitle(job.title)
+      if (!companyName && job.company) setCompanyName(job.company)
+
+      let resume: ParsedResume
+      if (selectedResume) {
+        resume = selectedResume.content as ParsedResume
+        setParsedResume(resume)
+      } else if (resumeFile) {
+        resume = await parseResume(resumeFile)
+        setParsedResume(resume)
+      } else {
+        throw new Error('No resume selected or uploaded')
+      }
+
+      const result = await matchResume(resume, job)
+      setMatchResult(result)
+      setShowMatchResults(true)
+      
+      // If match results available, use them to enhance the prompt
+      setPrompt(generateRetailorPrompt(result))
+
+    } catch (err) {
+      console.error('Match analysis failed:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      setIsCheckingMatch(false)
+    }
+  }
+
+  const handleRetailor = async () => {
+    if (!parsedResume || !parsedJob || !matchResult) {
+      setError('Resume and job data are required for retailoring')
+      return
+    }
+
+    if (!filename.trim()) {
+      setError('Please enter a filename for the tailored resume')
+      return
+    }
+
+    setIsRetailoring(true)
+    setError(null)
+
+    try {
+      const customPrompt = generateRetailorPrompt(matchResult)
+
+      const historyItem = await saveHistoryItem({
+        file_name: filename || `Retailored_Resume_${parsedJob.title || 'Position'}`,
+        job_title: jobTitle || parsedJob.title || 'Unknown Position',
+        company: companyName || parsedJob.company || 'Unknown Company',
+        original_resume_name: selectedResume?.name || resumeFile?.name || 'Resume',
+        status: 'tailoring',
+        favorited: false,
+        salary_range: salaryRange || undefined,
+        industry: industry || undefined,
+      })
+      setCurrentHistoryId(historyItem.id)
+
+      localStorage.setItem('pending_tailoring_id', historyItem.id)
+
+      addNotification({
+        title: 'Retailoring Started',
+        message: `We're retailoring your resume based on the match analysis. You'll be notified when it's ready.`,
+        type: 'info'
+      })
+
+      await tailorResume(
+        parsedResume,
+        parsedJob,
+        filename || `Retailored_Resume_${parsedJob.title || 'Position'}`,
+        historyItem.id,
+        customPrompt
+      )
+
+      try {
+        await updateHistoryItem(historyItem.id, {
+          status: 'complete',
+        })
+      } catch (updateError) {
+        console.warn('Frontend history update failed (backend may have already updated):', updateError)
+      }
+
+      setCurrentHistoryId(null)
+      
+      addNotification({
+        title: 'Retailoring Complete',
+        message: 'Your resume has been retailored based on the match analysis.',
+        type: 'success'
+      })
+    } catch (err) {
+      console.error('Retailoring failed:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.')
+      
+      addNotification({
+        title: 'Retailoring Failed',
+        message: err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.',
+        type: 'error'
+      })
+      
+      if (currentHistoryId) {
+        try {
+          await updateHistoryItem(currentHistoryId, {
+            status: 'failed',
+          })
+        } catch (updateError) {
+          console.error('Failed to update history status:', updateError)
+        }
+        setCurrentHistoryId(null)
+      }
+    } finally {
+      setIsRetailoring(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!resumeFile && !selectedResume) {
       setError('Please select or upload a resume')
@@ -230,22 +419,19 @@ function TailorTab() {
     setError(null)
     setTailoredResult(null)
 
-    navigate('/history', { 
-      state: { forceRefresh: true },
-      replace: false
-    })
-
     try {
       const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
       setParsedJob(job)
 
       const historyItem = await saveHistoryItem({
         file_name: filename || 'Tailored_Resume',
-        job_title: job.title || 'Unknown Position',
-        company: job.company || 'Unknown Company',
+        job_title: jobTitle || job.title || 'Unknown Position',
+        company: companyName || job.company || 'Unknown Company',
         original_resume_name: resumeFile?.name || selectedResume?.name || 'Resume',
         status: 'tailoring',
         favorited: false,
+        salary_range: salaryRange || undefined,
+        industry: industry || undefined,
       })
       setCurrentHistoryId(historyItem.id)
 
@@ -305,7 +491,32 @@ function TailorTab() {
   }
 
   return (
-    <div className="space-y-8">
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Output File Name</h2>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Provide a Name for the Output File. This will be used to name the file that is downloaded.
+        </p>
+          <div className="space-y-3">
+        <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <Label htmlFor="output-filename" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Output File Name
+            </Label>
+        </div>
+        <Input
+            id="output-filename"
+            type="text"
+            placeholder="Tailored_Resume"
+            value={filename}
+            onChange={(e) => setFileName(e.target.value)}
+            className="text-slate-900 dark:text-slate-100"
+        />
+        </div>  
+        </div>
+
       {/* Resume Upload Section */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
         <div className="flex items-center gap-2 mb-2">
@@ -405,10 +616,204 @@ function TailorTab() {
         </div>
       </div>
 
+      {/* Optional Details Section */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Optional Details</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Add job details for your records (stored in history)</p>
+          </div>
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="job-title" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Job Title
+              </Label>
+              <Input
+                id="job-title"
+                type="text"
+                placeholder="e.g., Software Engineer"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                className="text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="company-name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Company Name
+              </Label>
+              <Input
+                id="company-name"
+                type="text"
+                placeholder="e.g., Google"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="salary-range" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Salary Range
+              </Label>
+              <Input
+                id="salary-range"
+                type="text"
+                placeholder="e.g., $100k - $150k"
+                value={salaryRange}
+                onChange={(e) => setSalaryRange(e.target.value)}
+                className="text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="industry" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Industry
+              </Label>
+              <Input
+                id="industry"
+                type="text"
+                placeholder="e.g., Technology"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="text-slate-900 dark:text-slate-100"
+              />
+            </div>
+          </div>
+      </div>
+
+      {/* Check Match Section */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Match Analysis</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Optional: Check how well your resume matches the job before tailoring</p>
+          </div>
+          <Button
+            onClick={handleCheckMatch}
+            disabled={isCheckingMatch || (!resumeFile && !selectedResume) || !jobDescription.trim()}
+            variant="outline"
+            className="shrink-0"
+          >
+            {isCheckingMatch ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Target className="mr-2 h-4 w-4" />
+                Check Match
+              </>
+            )}
+          </Button>
+        </div>
+        
+        {/* Match Results */}
+        {matchResult && showMatchResults && (
+          <div className="mt-4 pt-4 border-t dark:border-slate-700 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Match Analysis</h3>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full">
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score:</span>
+                <span className={`text-2xl font-bold ${getMatchColor(matchResult.match_percentage)}`}>
+                  {matchResult.match_percentage}%
+                </span>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              {/* Strengths */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <ThumbsUp className="h-5 w-5" />
+                  <h4 className="font-semibold">Strengths</h4>
+                </div>
+                <ul className="space-y-2">
+                  {matchResult.strengths.map((strength, index) => (
+                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>{strength}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Gaps */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="h-5 w-5" />
+                  <h4 className="font-semibold">Missing Requirements</h4>
+                </div>
+                <ul className="space-y-2">
+                  {matchResult.gaps.map((gap, index) => (
+                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <span>{gap}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Recommendations */}
+            <div className="mb-6 pt-4 border-t dark:border-slate-700">
+              <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Recommended Improvements</h4>
+              <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
+                <ul className="space-y-3">
+                  {matchResult.recommendations.map((rec, index) => (
+                    <li key={index} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <span className="pt-0.5">{rec}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-500 dark:text-slate-400 italic mb-6">
+              The tailoring prompt has been updated to address the identified gaps.
+            </p>
+
+            {/* Retailor Button */}
+            <div className="pt-4 border-t dark:border-slate-700">
+              <div className="flex flex-col items-center gap-3">
+                <Button
+                  onClick={handleRetailor}
+                  disabled={isRetailoring || !parsedResume || !parsedJob || !filename.trim()}
+                  className="px-8 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
+                  size="lg"
+                >
+                  {isRetailoring ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Retailoring...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-5 w-5" />
+                      Retailor Resume
+                    </>
+                  )}
+                </Button>
+                <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
+                  Tailor your resume using the match analysis recommendations to improve your match score.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Customization Options Section */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Customization Options</h2>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Tailor Prompt</h2>
           <p className="text-sm text-slate-600 dark:text-slate-400">Customize the analysis prompt and output filename</p>
         </div>
 
@@ -439,24 +844,6 @@ function TailorTab() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-32 text-slate-900 dark:text-slate-100"
-            />
-          </div>
-
-          {/* Output Filename */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              <Label htmlFor="output-filename" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Output File Name
-              </Label>
-            </div>
-            <Input
-              id="output-filename"
-              type="text"
-              placeholder="Tailored_Resume"
-              value={filename}
-              onChange={(e) => setFileName(e.target.value)}
-              className="text-slate-900 dark:text-slate-100"
             />
           </div>
         </div>
@@ -494,7 +881,7 @@ function TailorTab() {
         </div>
       )}
 
-      {/* Results Section */}
+      {/* Results Section
       {parsedResume && parsedJob && (
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -521,7 +908,7 @@ function TailorTab() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Download Section */}
       {tailoredResult && (
@@ -557,493 +944,6 @@ function TailorTab() {
 }
 
 // ============================================================================
-// MATCH TAB COMPONENT
-// ============================================================================
-function MatchTab() {
-  const [resumeFile, setResumeFile] = useState<File | null>(null)
-  const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
-  const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
-  const [jobDescription, setJobDescription] = useState('')
-  const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null)
-  const [parsedJob, setParsedJob] = useState<JobData | null>(null)
-  const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isRetailoring, setIsRetailoring] = useState(false)
-  const [retailorHistoryId, setRetailorHistoryId] = useState<string | null>(null)
-  
-  const navigate = useNavigate()
-  const { addNotification } = useNotifications()
-
-  const handleResumeSelection = (result: ResumeSelectionResult) => {
-    if (result.type === 'existing') {
-      setSelectedResume(result.resume)
-      setResumeFile(null)
-      setError(null)
-    } else {
-      setResumeFile(result.file)
-      setSelectedResume(null)
-      setError(null)
-    }
-  }
-
-  const parseResume = async (file: File): Promise<ParsedResume> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('format', 'custom')
-
-    const response = await authenticatedFetch('/parse/resume', {
-      method: 'POST',
-      body: formData,
-    })
-
-    return await handleApiResponse<ParsedResume>(response)
-  }
-
-  const parseJobDescription = async (description: string, isLink: boolean): Promise<JobData> => {
-    const formData = new FormData()
-    
-    if (isLink) {
-      formData.append('url', description)
-    } else {
-      formData.append('text', description)
-    }
-
-    const response = await authenticatedFetch('/parse/job', {
-      method: 'POST',
-      body: formData,
-    })
-
-    const result = await handleApiResponse<JobData>(response)
-    return result.job_json || result
-  }
-
-  const matchResume = async (resume: ParsedResume, job: JobData): Promise<MatchResponse> => {
-    const payload = {
-      resume_jsonresume: resume,
-      job_json: job
-    }
-
-    const response = await authenticatedFetch('/match', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-
-    return await handleApiResponse<MatchResponse>(response)
-  }
-
-  const handleSubmit = async () => {
-    if (!resumeFile && !selectedResume) {
-      setError('Please select or upload a resume')
-      return
-    }
-    if (!jobDescription.trim()) {
-      setError('Please provide a job description')
-      return
-    }
-    
-    setIsProcessing(true)
-    setError(null)
-    setMatchResult(null)
-
-    try {
-      const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
-      setParsedJob(job)
-
-      let resume: ParsedResume
-      if (selectedResume) {
-        resume = selectedResume.content as ParsedResume
-        setParsedResume(resume)
-      } else if (resumeFile) {
-        resume = await parseResume(resumeFile)
-        setParsedResume(resume)
-      } else {
-        throw new Error('No resume selected or uploaded')
-      }
-
-      const result = await matchResume(resume, job)
-      setMatchResult(result)
-
-    } catch (err) {
-      console.error('Processing failed:', err)
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const getMatchColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-600 dark:text-green-400'
-    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400'
-    return 'text-red-600 dark:text-red-400'
-  }
-
-  const generateRetailorPrompt = (matchResult: MatchResponse): string => {
-    const gapsText = matchResult.gaps.length > 0
-      ? `\n- The following gaps were identified:\n${matchResult.gaps.map(gap => `  • ${gap}`).join('\n')}`
-      : '\n- No significant gaps were identified.'
-
-    const recommendationsText = matchResult.recommendations.length > 0
-      ? `\n- Recommended improvements:\n${matchResult.recommendations.map((rec, idx) => `  ${idx + 1}. ${rec}`).join('\n')}`
-      : '\n- No specific recommendations provided.'
-
-    return `${DEFAULT_PROMPT}
-
-MATCH ANALYSIS RESULTS:
-The resume was analyzed against the job description and achieved a ${matchResult.match_percentage}% match score.${gapsText}${recommendationsText}
-
-PRIORITY FOCUS:
-- Address the identified gaps by incorporating relevant skills, experiences, or achievements that align with the job requirements.
-- Prioritize improvements that will increase the match score while maintaining truth and accuracy.
-- Emphasize the recommended improvements in the resume tailoring process.
-- Focus on bridging the gap between current resume content and job requirements through strategic rewording and emphasis.`
-  }
-
-  const tailorResume = async (resume: ParsedResume, job: JobData, file_name: string, historyId?: string | null, customPrompt?: string): Promise<TailorResponse> => {
-    const payload = {
-      resume_jsonresume: resume,
-      job_json: job,
-      ...(customPrompt && { custom_prompt: customPrompt })
-    }
-
-    const params = new URLSearchParams({
-      format: 'pdf',
-      store: 'true',
-      bucket: 'resumes',
-      filename: file_name
-    })
-    
-    if (historyId) {
-      params.append('history_id', historyId)
-    }
-
-    const response = await authenticatedFetch(`/tailor?${params.toString()}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-
-    return await handleApiResponse<TailorResponse>(response)
-  }
-
-  const handleRetailor = async () => {
-    if (!parsedResume || !parsedJob || !matchResult) {
-      setError('Resume and job data are required for retailoring')
-      return
-    }
-
-    setIsRetailoring(true)
-    setError(null)
-
-    try {
-      const customPrompt = generateRetailorPrompt(matchResult)
-
-      const historyItem = await saveHistoryItem({
-        file_name: `Retailored_Resume_${parsedJob.title || 'Position'}`,
-        job_title: parsedJob.title || 'Unknown Position',
-        company: parsedJob.company || 'Unknown Company',
-        original_resume_name: selectedResume?.name || resumeFile?.name || 'Resume',
-        status: 'tailoring',
-        favorited: false,
-      })
-      setRetailorHistoryId(historyItem.id)
-
-      localStorage.setItem('pending_tailoring_id', historyItem.id)
-
-      navigate('/history', { 
-        state: { forceRefresh: true, newHistoryId: historyItem.id },
-        replace: false
-      })
-
-      addNotification({
-        title: 'Retailoring Started',
-        message: `We're retailoring your resume based on the match analysis. You'll be notified when it's ready.`,
-        type: 'info'
-      })
-
-      await tailorResume(
-        parsedResume,
-        parsedJob,
-        `Retailored_Resume_${parsedJob.title || 'Position'}`,
-        historyItem.id,
-        customPrompt
-      )
-
-      try {
-        await updateHistoryItem(historyItem.id, {
-          status: 'complete',
-        })
-      } catch (updateError) {
-        console.warn('Frontend history update failed (backend may have already updated):', updateError)
-      }
-
-      setRetailorHistoryId(null)
-    } catch (err) {
-      console.error('Retailoring failed:', err)
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.')
-      
-      addNotification({
-        title: 'Retailoring Failed',
-        message: err instanceof Error ? err.message : 'An unexpected error occurred while retailoring your resume.',
-        type: 'error'
-      })
-      
-      if (retailorHistoryId) {
-        try {
-          await updateHistoryItem(retailorHistoryId, {
-            status: 'failed',
-          })
-        } catch (updateError) {
-          console.error('Failed to update history status:', updateError)
-        }
-        setRetailorHistoryId(null)
-      }
-    } finally {
-      setIsRetailoring(false)
-    }
-  }
-
-  return (
-    <div className="space-y-8">
-      {/* Resume Upload Section */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-        <div className="flex items-center gap-2 mb-2">
-          <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Selection</h2>
-        </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-          Select an existing resume or upload a new one in PDF format.
-        </p>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="resume-select-match" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Resume
-            </Label>
-            <Button
-              id="resume-select-match"
-              type="button"
-              variant="outline"
-              onClick={() => setResumeSelectionDialogOpen(true)}
-              className="w-full justify-start"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              {selectedResume ? `Selected: ${selectedResume.name}` : resumeFile ? `Selected: ${resumeFile.name}` : 'Select or Upload Resume'}
-            </Button>
-          </div>
-          {(resumeFile || selectedResume) && (
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-md">
-              <CheckCircle className="h-4 w-4" />
-              <span>
-                {selectedResume 
-                  ? `Using existing resume: ${selectedResume.name}` 
-                  : `Selected: ${resumeFile?.name}`}
-              </span>
-            </div>
-          )}
-        </div>
-        <ResumeSelectionDialog
-          open={resumeSelectionDialogOpen}
-          onOpenChange={setResumeSelectionDialogOpen}
-          onSelect={handleResumeSelection}
-        />
-      </div>
-
-      {/* Job Description Section */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-        <div className="flex items-center gap-2 mb-2">
-          {isJobDescriptionLink ? (
-            <Link className="h-5 w-5 text-green-600 dark:text-green-400" />
-          ) : (
-            <Type className="h-5 w-5 text-green-600 dark:text-green-400" />
-          )}
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Job Description</h2>
-        </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-          Provide the job description either as a URL link or by pasting the text directly.
-        </p>
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="job-link-toggle-match"
-              checked={isJobDescriptionLink}
-              onCheckedChange={(checked) => setIsJobDescriptionLink(checked as boolean)}
-            />
-            <Label htmlFor="job-link-toggle-match" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Job description is a URL link
-            </Label>
-          </div>
-          
-          {isJobDescriptionLink ? (
-            <div className="space-y-2">
-              <Label htmlFor="job-link-match" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Job Posting URL
-              </Label>
-              <Input
-                id="job-link-match"
-                type="url"
-                placeholder="https://example.com/job-posting"
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                className="w-full text-slate-900 dark:text-slate-100"
-              />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="job-description-match" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Job Description Text
-              </Label>
-              <Textarea
-                id="job-description-match"
-                placeholder="Paste the job description here..."
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                className="min-h-32 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Submit Button */}
-      <div className="flex justify-center pt-2">
-        <Button 
-          onClick={handleSubmit}
-          disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
-          className="px-10 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
-          size="lg"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Analyzing Match...
-            </>
-          ) : (
-            'Check Match'
-          )}
-        </Button>
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <span className="text-red-800 dark:text-red-300 font-semibold block mb-1">Error</span>
-              <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Match Results */}
-      {matchResult && (
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Match Analysis</h2>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full">
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score:</span>
-              <span className={`text-2xl font-bold ${getMatchColor(matchResult.match_percentage)}`}>
-                {matchResult.match_percentage}%
-              </span>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Strengths */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <ThumbsUp className="h-5 w-5" />
-                <h3 className="font-semibold">Strengths</h3>
-              </div>
-              <ul className="space-y-2">
-                {matchResult.strengths.map((strength, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>{strength}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Gaps */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                <AlertTriangle className="h-5 w-5" />
-                <h3 className="font-semibold">Missing Requirements</h3>
-              </div>
-              <ul className="space-y-2">
-                {matchResult.gaps.map((gap, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                    <span>{gap}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Recommendations */}
-          <div className="mt-8 pt-6 border-t dark:border-slate-700">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Recommended Improvements</h3>
-            <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
-              <ul className="space-y-3">
-                {matchResult.recommendations.map((rec, index) => (
-                  <li key={index} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
-                    <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {index + 1}
-                    </div>
-                    <span className="pt-0.5">{rec}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Retailor Button */}
-          <div className="mt-8 pt-6 border-t dark:border-slate-700">
-            <div className="flex justify-center">
-              <Button
-                onClick={handleRetailor}
-                disabled={isRetailoring || !parsedResume || !parsedJob}
-                className="px-8 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
-                size="lg"
-              >
-                {isRetailoring ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Retailoring...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-5 w-5" />
-                    Retailor Resume
-                  </>
-                )}
-              </Button>
-            </div>
-            {parsedResume && parsedJob && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 text-center mt-3">
-                Tailor your resume using the match analysis recommendations to improve your match score.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ============================================================================
 // CREATE TAB COMPONENT
 // ============================================================================
 function CreateTab() {
@@ -1054,9 +954,6 @@ function CreateTab() {
   const [error, setError] = useState<string | null>(null)
 
   const handleCreateNew = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeStudioPage.tsx:handleCreateNew',message:'handleCreateNew called',data:{resumeName},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     if (!resumeName.trim()) {
       setError('Please enter a name for your resume')
       return
@@ -1089,16 +986,10 @@ function CreateTab() {
         references: []
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeStudioPage.tsx:beforeCreateResume',message:'About to call resumeService.createResume',data:{name:resumeName.trim(),contentKeys:Object.keys(emptyResumeContent)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       const newResume = await resumeService.createResume({
         name: resumeName.trim(),
         content: emptyResumeContent
       })
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeStudioPage.tsx:afterCreateResume',message:'Resume created successfully',data:{newResumeId:newResume?.id,newResumeName:newResume?.name},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
 
       // Create a history entry so it appears on the History page
       await saveHistoryItem({
@@ -1119,9 +1010,6 @@ function CreateTab() {
       // Navigate to the editor with the new resume ID
       navigate(`/editor/${newResume.id}`)
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeStudioPage.tsx:catchBlock',message:'Error creating resume',data:{error:err instanceof Error ? err.message : String(err),errorStack:err instanceof Error ? err.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       console.error('Failed to create resume:', err)
       setError('Failed to create resume. Please try again.')
       addNotification({
@@ -1214,11 +1102,12 @@ function CreateTab() {
 // ============================================================================
 export function ResumeStudioPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const currentTab = (searchParams.get('tab') as TabType) || 'tailor'
+  const tabParam = searchParams.get('tab')
+  // Handle legacy 'tailor' and 'match' tabs by redirecting to 'studio'
+  const currentTab: TabType = (tabParam === 'tailor' || tabParam === 'match') ? 'studio' : ((tabParam as TabType) || 'studio')
 
   const tabs: { id: TabType; label: string; icon: typeof Wand2 }[] = [
-    { id: 'tailor', label: 'Tailor Resume', icon: Wand2 },
-    { id: 'match', label: 'Match Analysis', icon: Target },
+    { id: 'studio', label: 'Tailor Resume', icon: Wand2 },
     { id: 'create', label: 'Create New', icon: Plus },
   ]
 
@@ -1254,7 +1143,7 @@ export function ResumeStudioPage() {
                   )}
                 >
                   <Icon className={cn(
-                    'h-5 w-5',
+                    'h-10 w-10',
                     isActive ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-500'
                   )} />
                   {tab.label}
@@ -1267,8 +1156,7 @@ export function ResumeStudioPage() {
 
       {/* Tab Content */}
       <div>
-        {currentTab === 'tailor' && <TailorTab />}
-        {currentTab === 'match' && <MatchTab />}
+        {currentTab === 'studio' && <StudioTab />}
         {currentTab === 'create' && <CreateTab />}
       </div>
     </div>

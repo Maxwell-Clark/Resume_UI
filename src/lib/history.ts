@@ -14,6 +14,8 @@ export interface HistoryItem {
   created_at: string
   resume_id?: string
   favorited: boolean
+  salary_range?: string
+  industry?: string
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -32,6 +34,8 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
         status: item.status || 'tailoring',
         resume_id: item.resume_id || null,
         favorited: item.favorited || false,
+        salary_range: item.salary_range || null,
+        industry: item.industry || null,
       }),
     })
 
@@ -48,6 +52,8 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       created_at: data.created_at,
       resume_id: data.resume_id,
       favorited: data.favorited || false,
+      salary_range: data.salary_range,
+      industry: data.industry,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
