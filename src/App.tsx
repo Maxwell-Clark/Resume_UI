@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { LandingPage } from '@/pages/LandingPage'
-import { TailoringPage } from '@/pages/TailoringPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { AccountSettingsPage } from '@/pages/AccountSettingsPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -14,8 +13,8 @@ import { FAQPage } from '@/pages/FAQPage'
 import { AboutPage } from '@/pages/AboutPage'
 import { ContactPage } from '@/pages/ContactPage'
 import { FeaturesPage } from '@/pages/FeaturesPage'
-import { ResumeMatchPage } from '@/pages/ResumeMatchPage'
 import { ResumeEditorPage } from '@/pages/ResumeEditorPage'
+import { ResumeStudioPage } from '@/pages/ResumeStudioPage'
 
 function ProtectedLayout() {
   return (
@@ -41,9 +40,9 @@ function HomeRoute() {
     )
   }
   
-  // If authenticated, redirect to tailor page
+  // If authenticated, redirect to studio page
   if (user) {
-    return <Navigate to="/tailor" replace />
+    return <Navigate to="/studio" replace />
   }
   
   // If not authenticated, show landing page
@@ -65,8 +64,9 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route element={<ProtectedLayout />}>
-            <Route path="tailor" element={<TailoringPage />} />
-            <Route path="match" element={<ResumeMatchPage />} />
+            <Route path="studio" element={<ResumeStudioPage />} />
+            <Route path="tailor" element={<Navigate to="/studio?tab=tailor" replace />} />
+            <Route path="match" element={<Navigate to="/studio?tab=match" replace />} />
             <Route path="editor" element={<ResumeEditorPage />} />
             <Route path="editor/:id" element={<ResumeEditorPage />} />
             <Route path="history" element={<HistoryPage />} />

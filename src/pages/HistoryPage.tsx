@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover } from '@/components/ui/popover'
@@ -207,7 +207,7 @@ export function HistoryPage() {
     return items
   }, [cachedRanges])
 
-  // Filter items by search query and status
+  // Filter items by search query and status, then sort favorites to top
   const filteredItems = useMemo(() => {
     let items = getAllCachedItems
     
@@ -226,7 +226,13 @@ export function HistoryPage() {
       items = items.filter(item => item.status === statusFilter)
     }
     
-    return items
+    // Sort: favorites first, then by created_at descending
+    return [...items].sort((a, b) => {
+      if (a.favorited !== b.favorited) {
+        return b.favorited ? 1 : -1
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
   }, [getAllCachedItems, searchQuery, statusFilter])
 
   // Get items for current page (from filtered items)
@@ -464,6 +470,43 @@ export function HistoryPage() {
     } catch (error) {
       console.error('Failed to update status:', error)
       // Optionally show an error toast here
+    }
+  }
+
+  const handleToggleFavorite = async (itemId: string, currentFavorited: boolean) => {
+    try {
+      const newFavorited = !currentFavorited
+
+      // Update in all cached ranges (optimistic update)
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const updatedItems = items.map(item => 
+            item.id === itemId 
+              ? { ...item, favorited: newFavorited }
+              : item
+          )
+          newMap.set(key, updatedItems)
+        })
+        return newMap
+      })
+
+      await updateHistoryItem(itemId, { favorited: newFavorited })
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error)
+      // Revert on error
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const updatedItems = items.map(item => 
+            item.id === itemId 
+              ? { ...item, favorited: currentFavorited }
+              : item
+          )
+          newMap.set(key, updatedItems)
+        })
+        return newMap
+      })
     }
   }
 
@@ -796,6 +839,20 @@ export function HistoryPage() {
                   </div>
                 </div>
                 <div className="ml-4 flex flex-col gap-2">
+                  <button
+                    onClick={() => handleToggleFavorite(item.id, item.favorited)}
+                    className="self-end p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    title={item.favorited ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Star 
+                      className={cn(
+                        "h-5 w-5 transition-colors",
+                        item.favorited 
+                          ? "fill-yellow-400 text-yellow-400" 
+                          : "text-slate-400 dark:text-slate-500 hover:text-yellow-400"
+                      )}
+                    />
+                  </button>
                   <Button
                     variant="outline"
                     onClick={() => handleEdit(item)}

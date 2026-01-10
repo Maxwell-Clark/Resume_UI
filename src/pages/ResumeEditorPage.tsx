@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages } from 'lucide-react'
 import { AIEditDialog } from '@/components/AIEditDialog'
+import { Dialog } from '@/components/ui/dialog'
 
 // Type definitions
 type WorkEntry = {
@@ -52,6 +53,35 @@ type CertificationEntry = {
   date?: string
 }
 
+type AwardEntry = {
+  title: string
+  date?: string
+  awarder?: string
+  summary?: string
+}
+
+type VolunteerEntry = {
+  organization: string
+  position?: string
+  startDate?: string
+  endDate?: string
+  summary?: string
+  highlights: string[]
+}
+
+type PublicationEntry = {
+  name: string
+  publisher?: string
+  releaseDate?: string
+  url?: string
+  summary?: string
+}
+
+type LanguageEntry = {
+  language: string
+  fluency?: string
+}
+
 export function ResumeEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -75,6 +105,10 @@ export function ResumeEditorPage() {
   const [skills, setSkills] = useState<SkillCategory[]>([])
   const [projects, setProjects] = useState<ProjectEntry[]>([])
   const [certifications, setCertifications] = useState<CertificationEntry[]>([])
+  const [awards, setAwards] = useState<AwardEntry[]>([])
+  const [volunteer, setVolunteer] = useState<VolunteerEntry[]>([])
+  const [publications, setPublications] = useState<PublicationEntry[]>([])
+  const [languages, setLanguages] = useState<LanguageEntry[]>([])
 
   // Resume name and history state
   const [resumeName, setResumeName] = useState('')
@@ -94,6 +128,9 @@ export function ResumeEditorPage() {
     fieldLabel: string
     currentText: string
   } | null>(null)
+
+  // PDF Preview state
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const loadLatestResume = useCallback(async () => {
     try {
@@ -235,6 +272,47 @@ export function ResumeEditorPage() {
             date: cert.date || ''
           })))
         }
+
+        // Load awards
+        if (content.awards && Array.isArray(content.awards)) {
+          setAwards(content.awards.map((award: any) => ({
+            title: award.title || '',
+            date: award.date || '',
+            awarder: award.awarder || '',
+            summary: award.summary || ''
+          })))
+        }
+
+        // Load volunteer
+        if (content.volunteer && Array.isArray(content.volunteer)) {
+          setVolunteer(content.volunteer.map((vol: any) => ({
+            organization: vol.organization || '',
+            position: vol.position || '',
+            startDate: vol.startDate || '',
+            endDate: vol.endDate || '',
+            summary: vol.summary || '',
+            highlights: Array.isArray(vol.highlights) ? vol.highlights : []
+          })))
+        }
+
+        // Load publications
+        if (content.publications && Array.isArray(content.publications)) {
+          setPublications(content.publications.map((pub: any) => ({
+            name: pub.name || '',
+            publisher: pub.publisher || '',
+            releaseDate: pub.releaseDate || '',
+            url: pub.url || '',
+            summary: pub.summary || ''
+          })))
+        }
+
+        // Load languages
+        if (content.languages && Array.isArray(content.languages)) {
+          setLanguages(content.languages.map((lang: any) => ({
+            language: lang.language || '',
+            fluency: lang.fluency || ''
+          })))
+        }
       }
     } catch (err) {
       setError('Failed to load resume')
@@ -245,6 +323,9 @@ export function ResumeEditorPage() {
   }
 
   const handleSave = async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:handleSave',message:'handleSave called',data:{id,hasResume:!!resume},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'I'})}).catch(()=>{});
+    // #endregion
     if (!id || !resume) return
 
     try {
@@ -335,11 +416,70 @@ export function ResumeEditorPage() {
         updatedContent.certifications = validCertifications
       }
 
+      // Update awards - filter out empty entries
+      const validAwards = awards
+        .filter(a => a.title) // Only include entries with title
+        .map(a => ({
+          title: a.title,
+          ...(a.date && { date: a.date }),
+          ...(a.awarder && { awarder: a.awarder }),
+          ...(a.summary && { summary: a.summary })
+        }))
+      if (validAwards.length > 0) {
+        updatedContent.awards = validAwards
+      }
+
+      // Update volunteer - filter out empty entries
+      const validVolunteer = volunteer
+        .filter(v => v.organization) // Only include entries with organization
+        .map(v => ({
+          organization: v.organization,
+          ...(v.position && { position: v.position }),
+          ...(v.startDate && { startDate: v.startDate }),
+          ...(v.endDate && { endDate: v.endDate }),
+          ...(v.summary && { summary: v.summary }),
+          highlights: v.highlights.filter(h => h.trim()).filter(h => h.length > 0)
+        }))
+      if (validVolunteer.length > 0) {
+        updatedContent.volunteer = validVolunteer
+      }
+
+      // Update publications - filter out empty entries
+      const validPublications = publications
+        .filter(p => p.name) // Only include entries with name
+        .map(p => ({
+          name: p.name,
+          ...(p.publisher && { publisher: p.publisher }),
+          ...(p.releaseDate && { releaseDate: p.releaseDate }),
+          ...(p.url && { url: p.url }),
+          ...(p.summary && { summary: p.summary })
+        }))
+      if (validPublications.length > 0) {
+        updatedContent.publications = validPublications
+      }
+
+      // Update languages - filter out empty entries
+      const validLanguages = languages
+        .filter(l => l.language) // Only include entries with language
+        .map(l => ({
+          language: l.language,
+          ...(l.fluency && { fluency: l.fluency })
+        }))
+      if (validLanguages.length > 0) {
+        updatedContent.languages = validLanguages
+      }
+
       // Update resume name if it changed
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:beforeUpdateResume',message:'About to update resume',data:{id,resumeName,contentKeys:Object.keys(updatedContent)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'J'})}).catch(()=>{});
+      // #endregion
       await resumeService.updateResume(id, {
         name: resumeName,
         content: updatedContent
       })
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:afterUpdateResume',message:'Resume updated successfully',data:{id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
 
       // Regenerate PDF and update history entry if it exists
       // IMPORTANT: Do this BEFORE loadResume to avoid state overwrite issues
@@ -395,6 +535,9 @@ export function ResumeEditorPage() {
       // Reload resume from DB after PDF generation to sync UI state
       await loadResume(id)
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/0539e95e-67a1-43cb-bc00-5fb88210f690',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ResumeEditorPage.tsx:handleSave:catch',message:'Save failed with error',data:{error:err instanceof Error ? err.message : String(err),errorStack:err instanceof Error ? err.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'L'})}).catch(()=>{});
+      // #endregion
       setError('Failed to save resume')
       console.error(err)
       addNotification({
@@ -548,6 +691,84 @@ export function ResumeEditorPage() {
 
   const removeCertificationEntry = (index: number) => {
     setCertifications(certifications.filter((_, i) => i !== index))
+  }
+
+  // Award handlers
+  const addAwardEntry = () => {
+    setAwards([...awards, { title: '' }])
+  }
+
+  const updateAwardEntry = (index: number, field: keyof AwardEntry, value: string) => {
+    const updated = [...awards]
+    updated[index] = { ...updated[index], [field]: value }
+    setAwards(updated)
+  }
+
+  const removeAwardEntry = (index: number) => {
+    setAwards(awards.filter((_, i) => i !== index))
+  }
+
+  // Volunteer handlers
+  const addVolunteerEntry = () => {
+    setVolunteer([...volunteer, { organization: '', highlights: [] }])
+  }
+
+  const updateVolunteerEntry = (index: number, field: keyof VolunteerEntry, value: any) => {
+    const updated = [...volunteer]
+    updated[index] = { ...updated[index], [field]: value }
+    setVolunteer(updated)
+  }
+
+  const removeVolunteerEntry = (index: number) => {
+    setVolunteer(volunteer.filter((_, i) => i !== index))
+  }
+
+  const addVolunteerHighlight = (index: number) => {
+    const updated = [...volunteer]
+    updated[index].highlights = [...updated[index].highlights, '']
+    setVolunteer(updated)
+  }
+
+  const updateVolunteerHighlight = (volIndex: number, highlightIndex: number, value: string) => {
+    const updated = [...volunteer]
+    updated[volIndex].highlights[highlightIndex] = value
+    setVolunteer(updated)
+  }
+
+  const removeVolunteerHighlight = (volIndex: number, highlightIndex: number) => {
+    const updated = [...volunteer]
+    updated[volIndex].highlights = updated[volIndex].highlights.filter((_, i) => i !== highlightIndex)
+    setVolunteer(updated)
+  }
+
+  // Publication handlers
+  const addPublicationEntry = () => {
+    setPublications([...publications, { name: '' }])
+  }
+
+  const updatePublicationEntry = (index: number, field: keyof PublicationEntry, value: string) => {
+    const updated = [...publications]
+    updated[index] = { ...updated[index], [field]: value }
+    setPublications(updated)
+  }
+
+  const removePublicationEntry = (index: number) => {
+    setPublications(publications.filter((_, i) => i !== index))
+  }
+
+  // Language handlers
+  const addLanguageEntry = () => {
+    setLanguages([...languages, { language: '' }])
+  }
+
+  const updateLanguageEntry = (index: number, field: keyof LanguageEntry, value: string) => {
+    const updated = [...languages]
+    updated[index] = { ...updated[index], [field]: value }
+    setLanguages(updated)
+  }
+
+  const removeLanguageEntry = (index: number) => {
+    setLanguages(languages.filter((_, i) => i !== index))
   }
 
   // AI Edit handlers
@@ -734,14 +955,24 @@ export function ResumeEditorPage() {
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
             {historyItem?.download_url && (
-              <Button
-                variant="outline"
-                onClick={() => window.open(historyItem.download_url, '_blank')}
-                className="flex items-center gap-2"
-              >
-                <Download className="h-4 w-4" />
-                Download PDF
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setPreviewOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(historyItem.download_url, '_blank')}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </Button>
+              </>
             )}
             <Button
               onClick={handleSave}
@@ -1286,6 +1517,278 @@ export function ResumeEditorPage() {
           )}
         </section>
 
+        {/* Awards Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Awards & Honors</h2>
+            </div>
+            <Button variant="outline" size="sm" onClick={addAwardEntry}>
+              <Plus className="mr-2 h-4 w-4" /> Add Award
+            </Button>
+          </div>
+          {awards.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No awards yet. Click "Add Award" to get started.</p>
+          ) : (
+            <div className="space-y-4">
+              {awards.map((entry, index) => (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="grid gap-4 md:grid-cols-2 flex-1">
+                      <div className="space-y-2">
+                        <Label>Award Title</Label>
+                        <Input
+                          value={entry.title}
+                          onChange={(e) => updateAwardEntry(index, 'title', e.target.value)}
+                          placeholder="Award name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Awarder</Label>
+                        <Input
+                          value={entry.awarder || ''}
+                          onChange={(e) => updateAwardEntry(index, 'awarder', e.target.value)}
+                          placeholder="Organization"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Date</Label>
+                        <Input
+                          value={entry.date || ''}
+                          onChange={(e) => updateAwardEntry(index, 'date', e.target.value)}
+                          placeholder="YYYY-MM or YYYY"
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Summary</Label>
+                        <Textarea
+                          value={entry.summary || ''}
+                          onChange={(e) => updateAwardEntry(index, 'summary', e.target.value)}
+                          rows={2}
+                          placeholder="Brief description of the award"
+                        />
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeAwardEntry(index)} className="ml-4">
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Volunteer Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Heart className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Volunteer Experience</h2>
+            </div>
+            <Button variant="outline" size="sm" onClick={addVolunteerEntry}>
+              <Plus className="mr-2 h-4 w-4" /> Add Volunteer
+            </Button>
+          </div>
+          {volunteer.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No volunteer experience yet. Click "Add Volunteer" to get started.</p>
+          ) : (
+            <div className="space-y-6">
+              {volunteer.map((entry, index) => (
+                <div key={index} className="border rounded-lg p-4 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-medium text-slate-900 dark:text-slate-100">Volunteer #{index + 1}</h3>
+                    <Button variant="ghost" size="sm" onClick={() => removeVolunteerEntry(index)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Organization</Label>
+                      <Input
+                        value={entry.organization}
+                        onChange={(e) => updateVolunteerEntry(index, 'organization', e.target.value)}
+                        placeholder="Organization name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Position</Label>
+                      <Input
+                        value={entry.position || ''}
+                        onChange={(e) => updateVolunteerEntry(index, 'position', e.target.value)}
+                        placeholder="Your role"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Start Date</Label>
+                      <Input
+                        value={entry.startDate || ''}
+                        onChange={(e) => updateVolunteerEntry(index, 'startDate', e.target.value)}
+                        placeholder="YYYY-MM or YYYY"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>End Date</Label>
+                      <Input
+                        value={entry.endDate || ''}
+                        onChange={(e) => updateVolunteerEntry(index, 'endDate', e.target.value)}
+                        placeholder="YYYY-MM, YYYY, or Present"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Summary</Label>
+                      <Textarea
+                        value={entry.summary || ''}
+                        onChange={(e) => updateVolunteerEntry(index, 'summary', e.target.value)}
+                        rows={2}
+                        placeholder="Brief description"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Highlights</Label>
+                      <Button variant="ghost" size="sm" onClick={() => addVolunteerHighlight(index)}>
+                        <Plus className="mr-1 h-3 w-3" /> Add
+                      </Button>
+                    </div>
+                    {entry.highlights.map((highlight, hIndex) => (
+                      <div key={hIndex} className="flex gap-2">
+                        <Input
+                          value={highlight}
+                          onChange={(e) => updateVolunteerHighlight(index, hIndex, e.target.value)}
+                          placeholder="Bullet point"
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => removeVolunteerHighlight(index, hIndex)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Publications Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Publications</h2>
+            </div>
+            <Button variant="outline" size="sm" onClick={addPublicationEntry}>
+              <Plus className="mr-2 h-4 w-4" /> Add Publication
+            </Button>
+          </div>
+          {publications.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No publications yet. Click "Add Publication" to get started.</p>
+          ) : (
+            <div className="space-y-4">
+              {publications.map((entry, index) => (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="grid gap-4 md:grid-cols-2 flex-1">
+                      <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input
+                          value={entry.name}
+                          onChange={(e) => updatePublicationEntry(index, 'name', e.target.value)}
+                          placeholder="Publication title"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Publisher</Label>
+                        <Input
+                          value={entry.publisher || ''}
+                          onChange={(e) => updatePublicationEntry(index, 'publisher', e.target.value)}
+                          placeholder="Journal, conference, etc."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Release Date</Label>
+                        <Input
+                          value={entry.releaseDate || ''}
+                          onChange={(e) => updatePublicationEntry(index, 'releaseDate', e.target.value)}
+                          placeholder="YYYY-MM or YYYY"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>URL</Label>
+                        <Input
+                          value={entry.url || ''}
+                          onChange={(e) => updatePublicationEntry(index, 'url', e.target.value)}
+                          placeholder="https://..."
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Summary</Label>
+                        <Textarea
+                          value={entry.summary || ''}
+                          onChange={(e) => updatePublicationEntry(index, 'summary', e.target.value)}
+                          rows={2}
+                          placeholder="Brief description"
+                        />
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removePublicationEntry(index)} className="ml-4">
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Languages Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Languages className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Languages</h2>
+            </div>
+            <Button variant="outline" size="sm" onClick={addLanguageEntry}>
+              <Plus className="mr-2 h-4 w-4" /> Add Language
+            </Button>
+          </div>
+          {languages.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No languages yet. Click "Add Language" to get started.</p>
+          ) : (
+            <div className="space-y-4">
+              {languages.map((entry, index) => (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="grid gap-4 md:grid-cols-2 flex-1">
+                      <div className="space-y-2">
+                        <Label>Language</Label>
+                        <Input
+                          value={entry.language}
+                          onChange={(e) => updateLanguageEntry(index, 'language', e.target.value)}
+                          placeholder="Language name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Fluency</Label>
+                        <Input
+                          value={entry.fluency || ''}
+                          onChange={(e) => updateLanguageEntry(index, 'fluency', e.target.value)}
+                          placeholder="Native, Fluent, Intermediate, etc."
+                        />
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeLanguageEntry(index)} className="ml-4">
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Save Button */}
         <div className="flex justify-center pt-2">
           <Button 
@@ -1319,6 +1822,28 @@ export function ResumeEditorPage() {
           onApply={handleAIEditApply}
         />
       )}
+
+      {/* PDF Preview Modal */}
+      <Dialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title="Resume Preview"
+        className="max-w-5xl w-full h-[90vh]"
+      >
+        <div className="h-[calc(90vh-100px)] w-full">
+          {historyItem?.download_url ? (
+            <iframe
+              src={historyItem.download_url}
+              className="w-full h-full border-0 rounded"
+              title="Resume PDF Preview"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500">
+              No PDF available. Save your resume to generate a preview.
+            </div>
+          )}
+        </div>
+      </Dialog>
     </div>
   )
 }

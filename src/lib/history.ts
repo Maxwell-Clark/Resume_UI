@@ -13,6 +13,7 @@ export interface HistoryItem {
   status_dates?: Partial<Record<StatusType, string>>
   created_at: string
   resume_id?: string
+  favorited: boolean
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -29,6 +30,8 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
         download_url: item.download_url || null,
         original_resume_name: item.original_resume_name || null,
         status: item.status || 'tailoring',
+        resume_id: item.resume_id || null,
+        favorited: item.favorited || false,
       }),
     })
 
@@ -44,6 +47,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       status_dates: data.status_dates || {},
       created_at: data.created_at,
       resume_id: data.resume_id,
+      favorited: data.favorited || false,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
@@ -67,6 +71,7 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
       status_dates: item.status_dates || {},
       created_at: item.created_at,
       resume_id: item.resume_id,
+      favorited: item.favorited || false,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
@@ -92,6 +97,7 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       status_dates: item.status_dates || {},
       created_at: item.created_at,
       resume_id: item.resume_id,
+      favorited: item.favorited || false,
     }
   } catch (error) {
     console.error('Error fetching history item:', error)
@@ -117,6 +123,7 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
       status_dates: item.status_dates || {},
       created_at: item.created_at,
       resume_id: item.resume_id,
+      favorited: item.favorited || false,
     }
   } catch (error) {
     console.error('Error fetching history item by resume_id:', error)
@@ -126,7 +133,7 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
 
 export async function updateHistoryItem(
   id: string, 
-  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name'>>
+  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name' | 'favorited'>>
 ): Promise<HistoryItem> {
   try {
     const response = await authenticatedFetch(`/history/${id}`, {
@@ -149,6 +156,7 @@ export async function updateHistoryItem(
       status_dates: item.status_dates || {},
       created_at: item.created_at,
       resume_id: item.resume_id,
+      favorited: item.favorited || false,
     }
   } catch (error) {
     console.error('Error updating history item:', error)
