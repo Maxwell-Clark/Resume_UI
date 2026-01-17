@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { resumeService } from '@/services/resume'
+import { resumeService, generateRetailorPrompt, type ParsedResume, type JobData, type MatchResponse } from '@/services/resume'
 import type { Resume } from '@/services/resume'
-import { getHistoryItemByResumeId, updateHistoryItem, type HistoryItem } from '@/lib/history'
+import { getHistoryItemByResumeId, getHistoryItemById, updateHistoryItem, type HistoryItem, type MatchResults } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages, ChevronDown, ChevronRight, Target, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Wand2, RefreshCw } from 'lucide-react'
 import { AIEditDialog } from '@/components/AIEditDialog'
+import { ApplyRecommendationsDialog } from '@/components/ApplyRecommendationsDialog'
+import { NewMatchDialog } from '@/components/NewMatchDialog'
 import { Dialog } from '@/components/ui/dialog'
 
 // Type definitions
@@ -131,6 +133,292 @@ export function ResumeEditorPage() {
 
   // PDF Preview state
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  // Apply Recommendations dialog state
+  const [recommendationsDialogOpen, setRecommendationsDialogOpen] = useState(false)
+
+  // New Match dialog state
+  const [newMatchDialogOpen, setNewMatchDialogOpen] = useState(false)
+  const [currentJobData, setCurrentJobData] = useState<JobData | null>(null)
+  const [currentMatchResult, setCurrentMatchResult] = useState<MatchResponse | null>(null)
+
+  // Retailor state
+  const [isRetailoring, setIsRetailoring] = useState(false)
+
+  // Quick rematch state
+  const [isRematching, setIsRematching] = useState(false)
+
+  // Match analysis collapsible sections state
+  const [matchSectionsExpanded, setMatchSectionsExpanded] = useState<{
+    strengths: boolean
+    gaps: boolean
+    recommendations: boolean
+  }>({ strengths: true, gaps: true, recommendations: true })
+
+  const toggleMatchSection = (section: 'strengths' | 'gaps' | 'recommendations') => {
+    setMatchSectionsExpanded(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  // Accordion state - basics, work, education, skills start expanded
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(['basics', 'work', 'education', 'skills'])
+  )
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(section)) {
+        newSet.delete(section)
+      } else {
+        newSet.add(section)
+      }
+      return newSet
+    })
+  }
+
+  // Build current resume content from state (matching the format used in handleSave)
+  const buildResumeContent = useCallback((): ParsedResume => {
+    const content: any = {}
+
+    // Build basics - matching handleSave structure
+    content.basics = {}
+    content.basics.name = basics.name?.trim() || 'Resume'
+    if (basics.email?.trim()) content.basics.email = basics.email.trim()
+    if (basics.phone?.trim()) content.basics.phone = basics.phone.trim()
+    if (basics.location?.trim()) content.basics.location = basics.location.trim()
+    if (basics.website?.trim()) content.basics.website = basics.website.trim()
+    if (basics.summary?.trim()) content.basics.summary = basics.summary.trim()
+
+    // Build work - filter out empty entries
+    const validWork = work
+      .filter(w => w.name && w.position)
+      .map(w => ({
+        name: w.name,
+        position: w.position,
+        ...(w.location && { location: w.location }),
+        ...(w.startDate && { startDate: w.startDate }),
+        ...(w.endDate && { endDate: w.endDate }),
+        ...(w.summary && { summary: w.summary }),
+        highlights: w.highlights.filter(h => h.trim())
+      }))
+    if (validWork.length > 0) content.work = validWork
+
+    // Build education
+    const validEducation = education
+      .filter(e => e.institution)
+      .map(e => ({
+        institution: e.institution,
+        ...(e.studyType && { studyType: e.studyType }),
+        ...(e.area && { area: e.area }),
+        ...(e.startDate && { startDate: e.startDate }),
+        ...(e.endDate && { endDate: e.endDate }),
+        ...(e.gpa && { gpa: e.gpa }),
+        details: e.details.filter(d => d.trim())
+      }))
+    if (validEducation.length > 0) content.education = validEducation
+
+    // Build skills
+    const validSkills = skills
+      .filter(s => s.name && s.keywords.length > 0)
+      .map(s => ({
+        name: s.name,
+        keywords: s.keywords.filter(k => k.trim())
+      }))
+    if (validSkills.length > 0) content.skills = validSkills
+
+    // Build projects
+    const validProjects = projects
+      .filter(p => p.name)
+      .map(p => ({
+        name: p.name,
+        ...(p.description && { description: p.description }),
+        ...(p.url && { url: p.url }),
+        ...(p.startDate && { startDate: p.startDate }),
+        ...(p.endDate && { endDate: p.endDate }),
+        highlights: p.highlights.filter(h => h.trim())
+      }))
+    if (validProjects.length > 0) content.projects = validProjects
+
+    // Build certifications
+    const validCerts = certifications.filter(c => c.name)
+    if (validCerts.length > 0) content.certificates = validCerts
+
+    // Build awards
+    const validAwards = awards.filter(a => a.title)
+    if (validAwards.length > 0) content.awards = validAwards
+
+    // Build volunteer
+    const validVolunteer = volunteer
+      .filter(v => v.organization)
+      .map(v => ({
+        organization: v.organization,
+        ...(v.position && { position: v.position }),
+        ...(v.startDate && { startDate: v.startDate }),
+        ...(v.endDate && { endDate: v.endDate }),
+        ...(v.summary && { summary: v.summary }),
+        highlights: v.highlights.filter(h => h.trim())
+      }))
+    if (validVolunteer.length > 0) content.volunteer = validVolunteer
+
+    // Build publications
+    const validPublications = publications.filter(p => p.name)
+    if (validPublications.length > 0) content.publications = validPublications
+
+    // Build languages
+    const validLanguages = languages.filter(l => l.language)
+    if (validLanguages.length > 0) content.languages = validLanguages
+
+    // Also add person and experience aliases for API compatibility
+    content.person = content.basics
+    content.experience = content.work || []
+
+    return content as ParsedResume
+  }, [basics, work, education, skills, projects, certifications, awards, volunteer, publications, languages])
+
+  // Handle match completion
+  const handleMatchComplete = useCallback((results: MatchResults, jobData: JobData) => {
+    // Update history item with new match results
+    if (historyItem) {
+      setHistoryItem({ ...historyItem, match_results: results })
+    }
+    setCurrentJobData(jobData)
+    setCurrentMatchResult({
+      match_percentage: results.match_percentage,
+      strengths: results.strengths,
+      gaps: results.gaps,
+      recommendations: results.recommendations,
+    })
+    addNotification({
+      title: 'Match Analysis Complete',
+      message: `Your resume achieved a ${results.match_percentage}% match score.`,
+      type: 'success'
+    })
+  }, [historyItem, addNotification])
+
+  // Handle retailor
+  const handleRetailor = useCallback(async (jobData?: JobData, matchResult?: MatchResponse) => {
+    // Try: passed param > currentJobData > historyItem.job_json
+    const job = jobData || currentJobData || (historyItem?.job_json as JobData | undefined)
+    const match = matchResult || currentMatchResult || (historyItem?.match_results ? {
+      match_percentage: historyItem.match_results.match_percentage,
+      strengths: historyItem.match_results.strengths,
+      gaps: historyItem.match_results.gaps,
+      recommendations: historyItem.match_results.recommendations,
+    } : null)
+
+    if (!job || !match) {
+      addNotification({
+        title: 'Cannot Retailor',
+        message: 'Please run a match analysis first to get job data.',
+        type: 'error'
+      })
+      return
+    }
+
+    setIsRetailoring(true)
+
+    try {
+      const resumeContent = resume?.content || buildResumeContent()
+      const prompt = generateRetailorPrompt(match)
+      const fileName = `${resumeName || 'Resume'}_Tailored_${Date.now()}`
+
+      const result = await resumeService.tailorResume(
+        resumeContent as any,
+        job,
+        fileName,
+        historyItem?.id,
+        prompt
+      )
+
+      // Get the download URL
+      const downloadUrl = result.storage.public_url || result.storage.url || result.storage.signed_url || ''
+
+      // Update history item
+      if (historyItem) {
+        await updateHistoryItem(historyItem.id, { download_url: downloadUrl, status: 'tailored' })
+        // Re-fetch to get the updated data from backend
+        const refreshedHistory = await getHistoryItemById(historyItem.id)
+        if (refreshedHistory) {
+          setHistoryItem(refreshedHistory)
+        }
+      }
+
+      addNotification({
+        title: 'Resume Tailored',
+        message: 'Your resume has been retailored. Check the History page to download.',
+        type: 'success'
+      })
+    } catch (err) {
+      console.error('Retailor failed:', err)
+      addNotification({
+        title: 'Retailor Failed',
+        message: err instanceof Error ? err.message : 'An error occurred while tailoring.',
+        type: 'error'
+      })
+    } finally {
+      setIsRetailoring(false)
+    }
+  }, [currentJobData, currentMatchResult, historyItem, resume, buildResumeContent, resumeName, addNotification])
+
+  // Handle quick rematch using saved job_json
+  const handleQuickRematch = useCallback(async () => {
+    const job = historyItem?.job_json as JobData | undefined
+
+    if (!job) {
+      addNotification({
+        title: 'Cannot Rematch',
+        message: 'No saved job data found. Use "New Match" to enter a job description.',
+        type: 'error'
+      })
+      return
+    }
+
+    setIsRematching(true)
+
+    try {
+      const resumeContent = resume?.content || buildResumeContent()
+
+      // Run match analysis
+      const result = await resumeService.matchResume(resumeContent as ParsedResume, job)
+
+      // Build match results
+      const matchResults: MatchResults = {
+        match_percentage: result.match_percentage,
+        strengths: result.strengths,
+        gaps: result.gaps,
+        recommendations: result.recommendations,
+        matched_at: new Date().toISOString(),
+      }
+
+      // Save match results to history
+      if (historyItem) {
+        await updateHistoryItem(historyItem.id, { match_results: matchResults })
+        setHistoryItem({ ...historyItem, match_results: matchResults })
+      }
+
+      // Update local state
+      setCurrentJobData(job)
+      setCurrentMatchResult(result)
+
+      addNotification({
+        title: 'Match Analysis Complete',
+        message: `Your resume achieved a ${result.match_percentage}% match score.`,
+        type: 'success'
+      })
+    } catch (err) {
+      console.error('Rematch failed:', err)
+      addNotification({
+        title: 'Rematch Failed',
+        message: err instanceof Error ? err.message : 'An error occurred during match analysis.',
+        type: 'error'
+      })
+    } finally {
+      setIsRematching(false)
+    }
+  }, [historyItem, resume, buildResumeContent, addNotification])
 
   const loadLatestResume = useCallback(async () => {
     try {
@@ -856,10 +1144,10 @@ export function ResumeEditorPage() {
           {error || 'Resume not found'}
         </div>
         <div className="flex gap-4">
-          <Button onClick={() => navigate('/resumes')} variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resumes
+          <Button onClick={() => navigate('/history')} variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to History
           </Button>
-          <Button onClick={() => navigate('/tailor')}>
+          <Button onClick={() => navigate('/studio')}>
             <Plus className="mr-2 h-4 w-4" /> Create New Resume
           </Button>
         </div>
@@ -867,11 +1155,24 @@ export function ResumeEditorPage() {
     )
   }
 
+  // Helper function to get match score color
+  const getMatchColor = (percentage: number) => {
+    if (percentage >= 80) return 'text-green-600 dark:text-green-400'
+    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-red-600 dark:text-red-400'
+  }
+
+  const getMatchBgColor = (percentage: number) => {
+    if (percentage >= 80) return 'bg-green-100 dark:bg-green-900/30'
+    if (percentage >= 60) return 'bg-yellow-100 dark:bg-yellow-900/30'
+    return 'bg-red-100 dark:bg-red-900/30'
+  }
+
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-7xl">
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/resumes')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/history')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </div>
@@ -983,13 +1284,20 @@ export function ResumeEditorPage() {
         </div>
       </div>
 
-      <div className="space-y-8">
+      <div className="flex gap-6">
+        {/* Main Editor Column */}
+        <div className="flex-1 space-y-8">
         {/* Basics Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4">
+          <div
+            className="flex items-center gap-2 mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('basics')}
+          >
             <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Personal Information</h2>
+            <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('basics') ? '' : '-rotate-90'}`} />
           </div>
+          {expandedSections.has('basics') && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -1053,19 +1361,26 @@ export function ResumeEditorPage() {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* Experience Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('work')}
+          >
             <div className="flex items-center gap-2">
               <Briefcase className="h-5 w-5 text-green-600 dark:text-green-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Experience</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('work') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addWorkEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addWorkEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Experience
             </Button>
           </div>
+          {expandedSections.has('work') && (
+          <>
           {work.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No experience entries yet. Click "Add Experience" to get started.</p>
           ) : (
@@ -1173,19 +1488,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Education Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('education')}
+          >
             <div className="flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Education</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('education') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addEducationEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addEducationEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Education
             </Button>
           </div>
+          {expandedSections.has('education') && (
+          <>
           {education.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No education entries yet. Click "Add Education" to get started.</p>
           ) : (
@@ -1281,19 +1604,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Skills Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('skills')}
+          >
             <div className="flex items-center gap-2">
               <Code className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Skills</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('skills') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addSkillCategory}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addSkillCategory(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Category
             </Button>
           </div>
+          {expandedSections.has('skills') && (
+          <>
           {skills.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No skill categories yet. Click "Add Category" to get started.</p>
           ) : (
@@ -1337,19 +1668,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Projects Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('projects')}
+          >
             <div className="flex items-center gap-2">
               <FolderKanban className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Projects</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('projects') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addProjectEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addProjectEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Project
             </Button>
           </div>
+          {expandedSections.has('projects') && (
+          <>
           {projects.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No projects yet. Click "Add Project" to get started.</p>
           ) : (
@@ -1449,19 +1788,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Certifications Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('certifications')}
+          >
             <div className="flex items-center gap-2">
               <Award className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Certifications</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('certifications') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addCertificationEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addCertificationEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Certification
             </Button>
           </div>
+          {expandedSections.has('certifications') && (
+          <>
           {certifications.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No certifications yet. Click "Add Certification" to get started.</p>
           ) : (
@@ -1503,19 +1850,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Awards Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('awards')}
+          >
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Awards & Honors</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('awards') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addAwardEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addAwardEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Award
             </Button>
           </div>
+          {expandedSections.has('awards') && (
+          <>
           {awards.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No awards yet. Click "Add Award" to get started.</p>
           ) : (
@@ -1566,19 +1921,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Volunteer Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('volunteer')}
+          >
             <div className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-rose-600 dark:text-rose-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Volunteer Experience</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('volunteer') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addVolunteerEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addVolunteerEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Volunteer
             </Button>
           </div>
+          {expandedSections.has('volunteer') && (
+          <>
           {volunteer.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No volunteer experience yet. Click "Add Volunteer" to get started.</p>
           ) : (
@@ -1658,19 +2021,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Publications Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('publications')}
+          >
             <div className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Publications</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('publications') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addPublicationEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addPublicationEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Publication
             </Button>
           </div>
+          {expandedSections.has('publications') && (
+          <>
           {publications.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No publications yet. Click "Add Publication" to get started.</p>
           ) : (
@@ -1729,19 +2100,27 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Languages Section */}
         <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            onClick={() => toggleSection('languages')}
+          >
             <div className="flex items-center gap-2">
               <Languages className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Languages</h2>
+              <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('languages') ? '' : '-rotate-90'}`} />
             </div>
-            <Button variant="outline" size="sm" onClick={addLanguageEntry}>
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addLanguageEntry(); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Language
             </Button>
           </div>
+          {expandedSections.has('languages') && (
+          <>
           {languages.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No languages yet. Click "Add Language" to get started.</p>
           ) : (
@@ -1775,11 +2154,13 @@ export function ResumeEditorPage() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
 
         {/* Save Button */}
         <div className="flex justify-center pt-2">
-          <Button 
+          <Button
             onClick={handleSave}
             disabled={saving}
             className="px-10 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
@@ -1797,6 +2178,205 @@ export function ResumeEditorPage() {
               </>
             )}
           </Button>
+        </div>
+        </div>
+
+        {/* Match History Sidebar */}
+        <div className="w-80 shrink-0">
+          <div className="sticky top-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Match History</h3>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setNewMatchDialogOpen(true)}
+                disabled={isRetailoring}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                New
+              </Button>
+            </div>
+
+            {historyItem?.match_results ? (
+              <div className="space-y-4">
+                {/* Match Score */}
+                <div className={`rounded-lg p-4 ${getMatchBgColor(historyItem.match_results.match_percentage)}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score</span>
+                    <span className={`text-2xl font-bold ${getMatchColor(historyItem.match_results.match_percentage)}`}>
+                      {historyItem.match_results.match_percentage}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+
+                {/* Action Buttons - at top for easy access */}
+                <div className="space-y-2">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={isRetailoring || (!historyItem?.job_json && !currentJobData)}
+                    onClick={() => handleRetailor()}
+                  >
+                    {isRetailoring ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Tailoring...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Retailor Resume
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={!historyItem?.match_results?.recommendations?.length || isRetailoring}
+                    onClick={() => setRecommendationsDialogOpen(true)}
+                  >
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Apply Recommendations
+                  </Button>
+                  {historyItem?.job_json && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      disabled={isRematching || isRetailoring}
+                      onClick={handleQuickRematch}
+                    >
+                      {isRematching ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Rematching...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Rematch
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Strengths - Collapsible */}
+                {historyItem.match_results.strengths.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('strengths')}
+                      className="flex items-center gap-2 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.strengths ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Strengths</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.strengths.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.strengths && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.strengths.map((strength, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Gaps - Collapsible */}
+                {historyItem.match_results.gaps.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('gaps')}
+                      className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.gaps ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Gaps</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.gaps.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.gaps && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.gaps.map((gap, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {gap}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Recommendations - Collapsible */}
+                {historyItem.match_results.recommendations.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('recommendations')}
+                      className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.recommendations ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <Lightbulb className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Recommendations</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.recommendations.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.recommendations && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Target className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">No match analysis yet</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                  Run a match analysis to see strengths, gaps, and recommendations.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewMatchDialogOpen(true)}
+                  disabled={isRetailoring}
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Start New Match
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1832,6 +2412,28 @@ export function ResumeEditorPage() {
           )}
         </div>
       </Dialog>
+
+      {/* Apply Recommendations Dialog */}
+      {historyItem?.match_results?.recommendations && (
+        <ApplyRecommendationsDialog
+          open={recommendationsDialogOpen}
+          onOpenChange={setRecommendationsDialogOpen}
+          recommendations={historyItem.match_results.recommendations}
+          currentSummary={basics.summary}
+          onApplySummary={(newSummary) => setBasics({ ...basics, summary: newSummary })}
+          onRetailor={() => handleRetailor()}
+        />
+      )}
+
+      {/* New Match Dialog */}
+      <NewMatchDialog
+        open={newMatchDialogOpen}
+        onOpenChange={setNewMatchDialogOpen}
+        resumeContent={resume?.content || buildResumeContent()}
+        historyItemId={historyItem?.id}
+        onMatchComplete={handleMatchComplete}
+        onRetailor={handleRetailor}
+      />
     </div>
   )
 }

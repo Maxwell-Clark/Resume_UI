@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star } from 'lucide-react'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover } from '@/components/ui/popover'
-import { ConfirmationDialog } from '@/components/ui/dialog'
+import { ConfirmationDialog, Dialog } from '@/components/ui/dialog'
 import { getHistoryItems, updateHistoryItem, deleteHistoryItem, saveHistoryCache, loadHistoryCache, type HistoryItem } from '@/lib/history'
 import { resumeService } from '@/services/resume'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ import { useNotifications } from '@/contexts/NotificationContext'
 
 const ITEMS_PER_PAGE = 20
 const CACHE_BATCH_SIZE = 50
+const SEEN_ITEMS_KEY = 'history_seen_items'
 
 type EditableStatus = 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired'
 
@@ -160,8 +161,198 @@ const StatusBadge = ({
   )
 }
 
-// All possible statuses for filtering
-const allStatuses: HistoryItem['status'][] = ['tailoring', 'tailored', 'applied', 'interviewing', 'rejected', 'ghosted', 'hired', 'complete', 'failed']
+// User-facing statuses for filtering (excludes internal 'complete' and 'failed' statuses)
+const filterableStatuses: HistoryItem['status'][] = ['tailoring', 'tailored', 'applied', 'interviewing', 'rejected', 'ghosted', 'hired']
+
+// Editable text component for inline editing
+const EditableText = ({
+  value,
+  onSave,
+  label,
+}: {
+  value: string
+  onSave: (newValue: string) => Promise<void>
+  label: string
+}) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState(value)
+  const [isSaving, setIsSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  useEffect(() => {
+    setEditValue(value)
+  }, [value])
+
+  const handleSave = async () => {
+    if (editValue.trim() === value) {
+      setIsEditing(false)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await onSave(editValue.trim())
+      setIsEditing(false)
+    } catch (error) {
+      console.error('Failed to save:', error)
+      setEditValue(value)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave()
+    } else if (e.key === 'Escape') {
+      setEditValue(value)
+      setIsEditing(false)
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <p className="flex items-center gap-1">
+        <strong>{label}:</strong>
+        <input
+          ref={inputRef}
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          disabled={isSaving}
+          className="flex-1 px-1.5 py-0.5 text-sm border border-blue-400 dark:border-blue-500 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </p>
+    )
+  }
+
+  return (
+    <p>
+      <strong>{label}:</strong>{' '}
+      <span
+        onClick={() => setIsEditing(true)}
+        className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded px-1 -mx-1 transition-colors"
+        title="Click to edit"
+      >
+        {value}
+      </span>
+    </p>
+  )
+}
+
+// Editable date component for inline editing status dates
+const EditableDate = ({
+  value,
+  onSave,
+  label,
+  icon: Icon,
+}: {
+  value: string
+  onSave: (newValue: string) => Promise<void>
+  label: string
+  icon: typeof CheckCircle
+}) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Convert ISO string to date input format (YYYY-MM-DD)
+  const dateToInputValue = (isoString: string) => {
+    const date = new Date(isoString)
+    return date.toISOString().split('T')[0]
+  }
+
+  // Convert date input value to ISO string (preserving time as start of day)
+  const inputValueToIso = (inputValue: string) => {
+    const date = new Date(inputValue)
+    return date.toISOString()
+  }
+
+  const formatStatusDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isEditing])
+
+  const handleSave = async (newValue: string) => {
+    const newIso = inputValueToIso(newValue)
+    if (newIso === value) {
+      setIsEditing(false)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await onSave(newIso)
+      setIsEditing(false)
+    } catch (error) {
+      console.error('Failed to save date:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setIsEditing(false)
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+        <span className="text-slate-600 dark:text-slate-400">
+          <strong>{label}:</strong>
+        </span>
+        <input
+          ref={inputRef}
+          type="date"
+          defaultValue={dateToInputValue(value)}
+          onChange={(e) => handleSave(e.target.value)}
+          onBlur={() => setIsEditing(false)}
+          onKeyDown={handleKeyDown}
+          disabled={isSaving}
+          className="px-1.5 py-0.5 text-xs border border-blue-400 dark:border-blue-500 rounded bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+      <span className="text-slate-600 dark:text-slate-400">
+        <strong>{label}:</strong>{' '}
+        <span
+          onClick={() => setIsEditing(true)}
+          className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded px-1 -mx-1 transition-colors"
+          title="Click to edit"
+        >
+          {formatStatusDate(value)}
+        </span>
+      </span>
+    </div>
+  )
+}
 
 export function HistoryPage() {
   const [cachedRanges, setCachedRanges] = useState<Map<string, HistoryItem[]>>(new Map())
@@ -173,6 +364,8 @@ export function HistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<HistoryItem['status'] | 'all'>('all')
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
@@ -181,9 +374,32 @@ export function HistoryPage() {
   const cachedRangesRef = useRef<Map<string, HistoryItem[]>>(new Map())
   const { addNotification } = useNotifications()
   const notifiedItemsRef = useRef<Set<string>>(new Set())
+  const [seenItems, setSeenItems] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(SEEN_ITEMS_KEY)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
 
   // Get cache key for a range
   const getCacheKey = (offset: number, limit: number) => `${offset}-${offset + limit - 1}`
+
+  // Mark an item as seen (removes "new" indicator)
+  const markAsSeen = useCallback((itemId: string) => {
+    setSeenItems(prev => {
+      if (prev.has(itemId)) return prev
+      const updated = new Set(prev)
+      updated.add(itemId)
+      try {
+        localStorage.setItem(SEEN_ITEMS_KEY, JSON.stringify([...updated]))
+      } catch (e) {
+        console.error('Failed to persist seen items:', e)
+      }
+      return updated
+    })
+  }, [])
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -223,7 +439,13 @@ export function HistoryPage() {
     
     // Filter by status
     if (statusFilter !== 'all') {
-      items = items.filter(item => item.status === statusFilter)
+      items = items.filter(item => {
+        // 'tailored' filter should also match 'complete' status (they're the same conceptually)
+        if (statusFilter === 'tailored') {
+          return item.status === 'tailored' || item.status === 'complete'
+        }
+        return item.status === statusFilter
+      })
     }
     
     // Sort: favorites first, then by created_at descending
@@ -473,6 +695,62 @@ export function HistoryPage() {
     }
   }
 
+  const handleFieldUpdate = async (itemId: string, field: 'company' | 'job_title', newValue: string) => {
+    try {
+      // Update in all cached ranges (optimistic update)
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const updatedItems = items.map(item =>
+            item.id === itemId
+              ? { ...item, [field]: newValue }
+              : item
+          )
+          newMap.set(key, updatedItems)
+        })
+        return newMap
+      })
+
+      await updateHistoryItem(itemId, { [field]: newValue })
+    } catch (error) {
+      console.error(`Failed to update ${field}:`, error)
+      // Revert on error by refetching
+      fetchBatch(0, CACHE_BATCH_SIZE)
+    }
+  }
+
+  const handleStatusDateUpdate = async (itemId: string, status: EditableStatus, newDate: string) => {
+    try {
+      const currentItem = getAllCachedItems.find(item => item.id === itemId)
+      const currentStatusDates = currentItem?.status_dates || {}
+
+      const updatedStatusDates = {
+        ...currentStatusDates,
+        [status]: newDate,
+      }
+
+      // Update in all cached ranges (optimistic update)
+      setCachedRanges(prev => {
+        const newMap = new Map(prev)
+        newMap.forEach((items, key) => {
+          const updatedItems = items.map(item =>
+            item.id === itemId
+              ? { ...item, status_dates: updatedStatusDates }
+              : item
+          )
+          newMap.set(key, updatedItems)
+        })
+        return newMap
+      })
+
+      await updateHistoryItem(itemId, { status_dates: updatedStatusDates })
+    } catch (error) {
+      console.error('Failed to update status date:', error)
+      // Revert on error by refetching
+      fetchBatch(0, CACHE_BATCH_SIZE)
+    }
+  }
+
   const handleToggleFavorite = async (itemId: string, currentFavorited: boolean) => {
     try {
       const newFavorited = !currentFavorited
@@ -563,7 +841,7 @@ export function HistoryPage() {
     })
   }
 
-  const formatStatusDate = (dateString: string) => {
+  const _formatStatusDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -571,6 +849,7 @@ export function HistoryPage() {
       day: 'numeric'
     })
   }
+  void _formatStatusDate // suppress unused warning
 
   const getStatusHistory = (item: HistoryItem) => {
     if (!item.status_dates) return []
@@ -713,7 +992,7 @@ export function HistoryPage() {
                 <span>All Statuses</span>
                 {statusFilter === 'all' && <CheckCircle className="h-4 w-4 ml-auto" />}
               </button>
-              {allStatuses.map((status) => {
+              {filterableStatuses.map((status) => {
                 const config = statusConfig[status]
                 const Icon = config.icon
                 return (
@@ -781,8 +1060,35 @@ export function HistoryPage() {
           </div>
         ) : (
           <>
-            {currentPageItems.map((item) => (
-                <div key={item.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+            {currentPageItems.map((item, index) => {
+              const isNew = !seenItems.has(item.id)
+              const prevItem = currentPageItems[index - 1]
+              const showDivider = prevItem?.favorited && !item.favorited
+              return (
+                <div key={item.id}>
+                  {showDivider && (
+                    <div className="flex items-center gap-3 py-2 mb-4">
+                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+                      <span className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                        Other Resumes
+                      </span>
+                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent" />
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-6 relative transition-all duration-300",
+                      isNew
+                        ? "border-2 border-transparent bg-gradient-to-r from-white to-white dark:from-slate-800 dark:to-slate-800 animate-border-glow"
+                        : "border-slate-200 dark:border-slate-700"
+                    )}
+                    onMouseEnter={() => isNew && markAsSeen(item.id)}
+                  >
+              {isNew && (
+                <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md animate-pulse">
+                  NEW
+                </span>
+              )}
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -799,8 +1105,16 @@ export function HistoryPage() {
                       />
                     </div>
                     <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                      <p><strong>Job Title:</strong> {item.job_title}</p>
-                      <p><strong>Company:</strong> {item.company}</p>
+                      <EditableText
+                        value={item.job_title}
+                        onSave={(newValue) => handleFieldUpdate(item.id, 'job_title', newValue)}
+                        label="Job Title"
+                      />
+                      <EditableText
+                        value={item.company}
+                        onSave={(newValue) => handleFieldUpdate(item.id, 'company', newValue)}
+                        label="Company"
+                      />
                       {item.original_resume_name && (
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           <strong>Original:</strong> {item.original_resume_name}
@@ -821,12 +1135,13 @@ export function HistoryPage() {
                                   const config = statusConfig[status]
                                   const StatusIcon = config.icon
                                   return (
-                                    <div key={status} className="flex items-center gap-2 text-xs">
-                                      <StatusIcon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                                      <span className="text-slate-600 dark:text-slate-400">
-                                        <strong>{label}:</strong> {formatStatusDate(date)}
-                                      </span>
-                                    </div>
+                                    <EditableDate
+                                      key={status}
+                                      value={date}
+                                      onSave={(newDate) => handleStatusDateUpdate(item.id, status, newDate)}
+                                      label={label}
+                                      icon={StatusIcon}
+                                    />
                                   )
                                 })}
                               </div>
@@ -853,6 +1168,18 @@ export function HistoryPage() {
                       )}
                     />
                   </button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setPreviewItem(item)
+                      setPreviewOpen(true)
+                    }}
+                    disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
+                    className="flex items-center gap-2 w-full justify-start"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => handleEdit(item)}
@@ -891,7 +1218,9 @@ export function HistoryPage() {
                 </div>
               </div>
             </div>
-            ))}
+                </div>
+              )
+            })}
             
             {/* Pagination Controls */}
             {totalPages > 1 && (
@@ -968,6 +1297,31 @@ export function HistoryPage() {
         onConfirm={handleDeleteConfirm}
         variant="destructive"
       />
+
+      {/* PDF Preview Modal */}
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open)
+          if (!open) setPreviewItem(null)
+        }}
+        title={previewItem?.file_name || 'Resume Preview'}
+        className="max-w-5xl w-full h-[90vh]"
+      >
+        <div className="h-[calc(90vh-100px)] w-full">
+          {previewItem?.download_url ? (
+            <iframe
+              src={previewItem.download_url}
+              className="w-full h-full border-0 rounded"
+              title="Resume PDF Preview"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500">
+              No PDF available for preview.
+            </div>
+          )}
+        </div>
+      </Dialog>
     </div>
   )
 }
