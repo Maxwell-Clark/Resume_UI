@@ -114,8 +114,6 @@ function StudioTab() {
   const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT)
   const [isProcessing, setIsProcessing] = useState(false)
-//  const [_parsedResume, setParsedResume] = useState<ParsedResume | null>(null)
-//  const [_parsedJob, setParsedJob] = useState<JobData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filename, setFileName] = useState<string>('Tailored_Resume')
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
@@ -293,8 +291,7 @@ PRIORITY FOCUS:
 
     try {
       const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
-      setParsedJob(job)
-      
+
       // Pre-fill optional fields from parsed job if not already set
       if (!jobTitle && job.title) setJobTitle(job.title)
       if (!companyName && job.company) setCompanyName(job.company)
@@ -302,10 +299,8 @@ PRIORITY FOCUS:
       let resume: ParsedResume
       if (selectedResume) {
         resume = selectedResume.content as ParsedResume
-        setParsedResume(resume)
       } else if (resumeFile) {
         resume = await parseResume(resumeFile)
-        setParsedResume(resume)
       } else {
         throw new Error('No resume selected or uploaded')
       }
@@ -368,7 +363,6 @@ PRIORITY FOCUS:
     try {
       // Parse job description
       const job = await parseJobDescription(jobDescription, isJobDescriptionLink)
-      setParsedJob(job)
 
       // Determine which prompt to use
       const tailorPrompt = useEnhancedPrompt && matchResult ? generateRetailorPrompt(matchResult) : prompt
@@ -410,10 +404,8 @@ PRIORITY FOCUS:
       let resume: ParsedResume
       if (selectedResume) {
         resume = selectedResume.content as ParsedResume
-        setParsedResume(resume)
       } else if (resumeFile) {
         resume = await parseResume(resumeFile)
-        setParsedResume(resume)
       } else {
         throw new Error('No resume selected or uploaded')
       }
