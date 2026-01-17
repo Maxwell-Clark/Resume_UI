@@ -453,8 +453,20 @@ export function ResumeEditorPage() {
       setError(null)
       
       // Load history item and set default name
+      // Preserve existing match_results if the fresh fetch doesn't have it
       const history = await getHistoryItemByResumeId(resumeId)
-      setHistoryItem(history)
+      setHistoryItem(prevHistory => {
+        if (!history) return prevHistory
+        // If fetched history has match_results, use it; otherwise preserve existing
+        if (history.match_results) {
+          return history
+        }
+        // Preserve existing match_results if we have them
+        if (prevHistory?.match_results) {
+          return { ...history, match_results: prevHistory.match_results }
+        }
+        return history
+      })
       
       // Set resume name with default logic
       // Prefer history file_name if it exists, otherwise use resume name
@@ -775,18 +787,15 @@ export function ResumeEditorPage() {
         // Update history entry with new download URL and file_name if it exists
         if (currentHistoryItem) {
           const newDownloadUrl = convertResult.storage.public_url || convertResult.storage.url
-          
-          await updateHistoryItem(currentHistoryItem.id, {
+
+          // Use the returned value from updateHistoryItem to preserve all fields including match_results
+          const updatedHistoryItem = await updateHistoryItem(currentHistoryItem.id, {
             download_url: newDownloadUrl,
             file_name: resumeName
           })
-          
-          // Update local state
-          setHistoryItem({
-            ...currentHistoryItem,
-            download_url: newDownloadUrl,
-            file_name: resumeName
-          })
+
+          // Update local state with the full returned item (preserves match_results)
+          setHistoryItem(updatedHistoryItem)
           
           addNotification({
             title: 'Resume Updated',
@@ -2419,8 +2428,14 @@ export function ResumeEditorPage() {
           open={recommendationsDialogOpen}
           onOpenChange={setRecommendationsDialogOpen}
           recommendations={historyItem.match_results.recommendations}
-          currentSummary={basics.summary}
+          sectionData={{
+            summary: basics.summary,
+            skills: skills,
+            experience: work
+          }}
           onApplySummary={(newSummary) => setBasics({ ...basics, summary: newSummary })}
+          onApplySkills={(newSkills) => setSkills(newSkills)}
+          onApplyExperience={(newWork) => setWork(newWork)}
           onRetailor={() => handleRetailor()}
         />
       )}

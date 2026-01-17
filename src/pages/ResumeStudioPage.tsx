@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
   FileText, Link, Type, Loader2, CheckCircle, AlertCircle,
@@ -543,17 +542,40 @@ PRIORITY FOCUS:
           Provide the job description either as a URL link or by pasting the text directly.
         </p>
         <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="job-link-toggle-tailor"
-              checked={isJobDescriptionLink}
-              onCheckedChange={(checked) => setIsJobDescriptionLink(checked as boolean)}
-            />
-            <Label htmlFor="job-link-toggle-tailor" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Job description is a URL link
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Input Type
             </Label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsJobDescriptionLink(false)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                  !isJobDescriptionLink
+                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                <Type className="h-3 w-3" />
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsJobDescriptionLink(true)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors",
+                  isJobDescriptionLink
+                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                <Link className="h-3 w-3" />
+                URL
+              </button>
+            </div>
           </div>
-          
+
           {isJobDescriptionLink ? (
             <div className="space-y-2">
               <Label htmlFor="job-link-tailor" className="text-sm font-medium text-slate-700 dark:text-slate-300">
