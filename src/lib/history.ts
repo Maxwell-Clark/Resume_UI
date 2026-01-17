@@ -2,6 +2,22 @@ import { authenticatedFetch, handleApiResponse } from './auth'
 
 export type StatusType = 'tailoring' | 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired' | 'complete' | 'failed'
 
+export interface MatchResults {
+  match_percentage: number
+  strengths: string[]
+  gaps: string[]
+  recommendations: string[]
+  matched_at: string
+}
+
+export interface JobData {
+  title: string
+  company: string
+  description: string
+  requirements: string[]
+  [key: string]: unknown
+}
+
 export interface HistoryItem {
   id: string
   file_name: string
@@ -16,6 +32,8 @@ export interface HistoryItem {
   favorited: boolean
   salary_range?: string
   industry?: string
+  match_results?: MatchResults
+  job_json?: JobData
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -36,6 +54,8 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
         favorited: item.favorited || false,
         salary_range: item.salary_range || null,
         industry: item.industry || null,
+        match_results: item.match_results || null,
+        job_json: item.job_json || null,
       }),
     })
 
@@ -54,6 +74,8 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       favorited: data.favorited || false,
       salary_range: data.salary_range,
       industry: data.industry,
+      match_results: data.match_results,
+      job_json: data.job_json,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
@@ -78,6 +100,8 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
       created_at: item.created_at,
       resume_id: item.resume_id,
       favorited: item.favorited || false,
+      match_results: item.match_results,
+      job_json: item.job_json,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
@@ -104,6 +128,8 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       created_at: item.created_at,
       resume_id: item.resume_id,
       favorited: item.favorited || false,
+      match_results: item.match_results,
+      job_json: item.job_json,
     }
   } catch (error) {
     console.error('Error fetching history item:', error)
@@ -114,9 +140,9 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
 export async function getHistoryItemByResumeId(resume_id: string): Promise<HistoryItem | null> {
   try {
     const response = await authenticatedFetch(`/history/resume/${resume_id}`)
-    
+
     if (response.status === 404) return null
-    
+
     const item = await handleApiResponse<HistoryItem>(response)
     return {
       id: item.id.toString(),
@@ -130,6 +156,8 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
       created_at: item.created_at,
       resume_id: item.resume_id,
       favorited: item.favorited || false,
+      match_results: item.match_results,
+      job_json: item.job_json,
     }
   } catch (error) {
     console.error('Error fetching history item by resume_id:', error)
@@ -138,8 +166,8 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
 }
 
 export async function updateHistoryItem(
-  id: string, 
-  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name' | 'favorited'>>
+  id: string,
+  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name' | 'favorited' | 'company' | 'job_title' | 'match_results' | 'job_json' | 'salary_range' | 'industry'>>
 ): Promise<HistoryItem> {
   try {
     const response = await authenticatedFetch(`/history/${id}`, {
@@ -163,6 +191,8 @@ export async function updateHistoryItem(
       created_at: item.created_at,
       resume_id: item.resume_id,
       favorited: item.favorited || false,
+      match_results: item.match_results,
+      job_json: item.job_json,
     }
   } catch (error) {
     console.error('Error updating history item:', error)

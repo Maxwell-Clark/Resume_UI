@@ -1,14 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useAuthModal } from '@/contexts/AuthModalContext'
 import { PublicLayout } from '@/components/PublicLayout'
 import { Button } from '@/components/ui/button'
-import { 
+import {
   FileText,
-  Sparkles, 
-  Link as LinkIcon, 
-  History, 
-  Upload, 
-  CheckCircle, 
+  Sparkles,
+  Link as LinkIcon,
+  History,
+  Upload,
+  CheckCircle,
   Shield,
   Zap,
   Globe,
@@ -17,14 +18,19 @@ import {
 
 export function LandingPage() {
   const { user, loading } = useAuth()
+  const { openAuthModal } = useAuthModal()
   const navigate = useNavigate()
 
   const handleGetStarted = () => {
     if (user) {
-      navigate('/tailor')
+      navigate('/studio')
     } else {
-      navigate('/signup')
+      openAuthModal('signup')
     }
+  }
+
+  const handleSignIn = () => {
+    openAuthModal('login')
   }
 
   if (loading) {
@@ -65,15 +71,14 @@ export function LandingPage() {
                 {user ? 'Go to Dashboard' : 'Get Started Free'}
               </Button>
               {!user && (
-                <Link to="/login">
-                  <Button 
-                    size="lg" 
-                    variant="outline" 
-                    className="text-lg px-8 py-6"
-                  >
-                    Sign In
-                  </Button>
-                </Link>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-lg px-8 py-6"
+                  onClick={handleSignIn}
+                >
+                  Sign In
+                </Button>
               )}
             </div>
           </div>
@@ -282,8 +287,8 @@ export function LandingPage() {
                   </>
                 ) : (
                   <>
-                    <li><Link to="/signup" className="hover:text-white transition-colors">Sign Up</Link></li>
-                    <li><Link to="/login" className="hover:text-white transition-colors">Sign In</Link></li>
+                    <li><button onClick={() => openAuthModal('signup')} className="hover:text-white transition-colors">Sign Up</button></li>
+                    <li><button onClick={() => openAuthModal('login')} className="hover:text-white transition-colors">Sign In</button></li>
                   </>
                 )}
               </ul>

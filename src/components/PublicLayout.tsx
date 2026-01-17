@@ -2,6 +2,7 @@ import { Navbar, NavbarBrand, NavbarNav, NavbarItem, NavbarActions, NavbarSpacer
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/contexts/AuthContext'
+import { useAuthModal } from '@/contexts/AuthModalContext'
 import { Button } from '@/components/ui/button'
 import { FileText } from 'lucide-react'
 
@@ -12,6 +13,7 @@ interface PublicLayoutProps {
 export function PublicLayout({ children }: PublicLayoutProps) {
   const location = useLocation()
   const { user } = useAuth()
+  const { openAuthModal } = useAuthModal()
   const navigate = useNavigate()
 
   const navLinks = [
@@ -24,10 +26,14 @@ export function PublicLayout({ children }: PublicLayoutProps) {
 
   const handleGetStarted = () => {
     if (user) {
-      navigate('/tailor')
+      navigate('/studio')
     } else {
-      navigate('/signup')
+      openAuthModal('signup')
     }
+  }
+
+  const handleSignIn = () => {
+    openAuthModal('login')
   }
 
   return (
@@ -63,18 +69,16 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             <Button
               variant="default"
               size="sm"
-              onClick={() => navigate('/tailor')}
+              onClick={() => navigate('/studio')}
               className="ml-2"
             >
               Dashboard
             </Button>
           ) : (
             <>
-              <Link to="/login">
-                <Button variant="ghost" size="sm" className="ml-2">
-                  Sign In
-                </Button>
-              </Link>
+              <Button variant="ghost" size="sm" className="ml-2" onClick={handleSignIn}>
+                Sign In
+              </Button>
               <Button
                 size="sm"
                 onClick={handleGetStarted}

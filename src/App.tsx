@@ -1,12 +1,13 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { AuthModalProvider, useAuthModal } from '@/contexts/AuthModalContext'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { AuthModal } from '@/components/AuthModal'
 import { LandingPage } from '@/pages/LandingPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { AccountSettingsPage } from '@/pages/AccountSettingsPage'
-import { LoginPage } from '@/pages/LoginPage'
-import { SignupPage } from '@/pages/SignupPage'
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage'
 import { PricingPage } from '@/pages/PricingPage'
 import { FAQPage } from '@/pages/FAQPage'
@@ -24,6 +25,32 @@ function ProtectedLayout() {
       </Layout>
     </ProtectedRoute>
   )
+}
+
+// Redirect /login to home and open modal in login mode
+function LoginRedirect() {
+  const navigate = useNavigate()
+  const { openAuthModal } = useAuthModal()
+
+  useEffect(() => {
+    navigate('/', { replace: true })
+    openAuthModal('login')
+  }, [navigate, openAuthModal])
+
+  return null
+}
+
+// Redirect /signup to home and open modal in signup mode
+function SignupRedirect() {
+  const navigate = useNavigate()
+  const { openAuthModal } = useAuthModal()
+
+  useEffect(() => {
+    navigate('/', { replace: true })
+    openAuthModal('signup')
+  }, [navigate, openAuthModal])
+
+  return null
 }
 
 function HomeRoute() {
@@ -53,27 +80,30 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/" element={<HomeRoute />} />
-          <Route path="/features" element={<FeaturesPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/faq" element={<FAQPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route element={<ProtectedLayout />}>
-            <Route path="studio" element={<ResumeStudioPage />} />
-            <Route path="tailor" element={<Navigate to="/studio" replace />} />
-            <Route path="match" element={<Navigate to="/studio" replace />} />
-            <Route path="editor" element={<ResumeEditorPage />} />
-            <Route path="editor/:id" element={<ResumeEditorPage />} />
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="account" element={<AccountSettingsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <AuthModalProvider>
+          <AuthModal />
+          <Routes>
+            <Route path="/login" element={<LoginRedirect />} />
+            <Route path="/signup" element={<SignupRedirect />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/" element={<HomeRoute />} />
+            <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/faq" element={<FAQPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="studio" element={<ResumeStudioPage />} />
+              <Route path="tailor" element={<Navigate to="/studio" replace />} />
+              <Route path="match" element={<Navigate to="/studio" replace />} />
+              <Route path="editor" element={<ResumeEditorPage />} />
+              <Route path="editor/:id" element={<ResumeEditorPage />} />
+              <Route path="history" element={<HistoryPage />} />
+              <Route path="account" element={<AccountSettingsPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthModalProvider>
       </BrowserRouter>
     </AuthProvider>
   )

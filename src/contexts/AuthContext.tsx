@@ -32,6 +32,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signInWithMagicLink: (email: string) => Promise<{ error: AuthError | null }>
   signInWithGoogle: () => Promise<{ error: AuthError | null }>
+  signInWithLinkedIn: () => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
   getAccessToken: () => string | null
 }
@@ -102,6 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error }
   }
 
+  const signInWithLinkedIn = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'linkedin_oidc',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    return { error }
+  }
+
   const signOut = async () => {
     await supabase.auth.signOut()
     setUser(null)
@@ -120,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signInWithMagicLink,
     signInWithGoogle,
+    signInWithLinkedIn,
     signOut,
     getAccessToken,
   }
