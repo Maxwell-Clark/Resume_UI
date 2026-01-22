@@ -88,7 +88,7 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
     const response = await authenticatedFetch(`/history?limit=${limit}&offset=${offset}`)
     
     const data = await handleApiResponse<HistoryItem[]>(response)
-    return data.map((item: any) => ({
+    return data.map((item: HistoryItem) => ({
       id: item.id.toString(),
       file_name: item.file_name,
       job_title: item.job_title,

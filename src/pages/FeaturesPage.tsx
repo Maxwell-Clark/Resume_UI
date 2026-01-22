@@ -1,39 +1,65 @@
 import { PublicLayout } from '@/components/PublicLayout'
-import { 
-  Sparkles, 
-  Link as LinkIcon, 
-  FileText, 
-  History, 
-  Shield, 
+import {
+  Sparkles,
+  Link as LinkIcon,
+  History,
+  Shield,
   Zap,
   Globe,
   CheckCircle,
   FileCheck,
   Settings,
-  Download
+  Download,
+  Target,
+  Edit,
+  Wand2
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { useAuthModal } from '@/contexts/AuthModalContext'
 
 export function FeaturesPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { openAuthModal } = useAuthModal()
 
   const handleGetStarted = () => {
     if (user) {
-      navigate('/tailor')
+      navigate('/studio')
     } else {
-      navigate('/signup')
+      openAuthModal('signup')
     }
   }
 
   const mainFeatures = [
     {
-      icon: <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
+      icon: <Target className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
+      title: 'Match Analysis',
+      description: 'See exactly how well your resume matches each job. Get a percentage score, detailed strengths, gaps, and personalized recommendations to improve your match.',
+      benefits: [
+        'Percentage match score at a glance',
+        'Detailed strengths and gaps breakdown',
+        'Personalized improvement recommendations',
+        'Side-by-side comparison view',
+      ],
+    },
+    {
+      icon: <Wand2 className="h-8 w-8 text-purple-600 dark:text-purple-400" />,
+      title: 'One-Click Tailoring',
+      description: 'Apply AI-powered recommendations automatically with a single click. Your resume is instantly optimized to address gaps and highlight relevant experience.',
+      benefits: [
+        'Apply all recommendations instantly',
+        'Smart keyword integration',
+        'Maintains factual accuracy',
+        'Preview changes before applying',
+      ],
+    },
+    {
+      icon: <Sparkles className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />,
       title: 'AI-Powered Tailoring',
-      description: 'Our advanced Gemini AI analyzes job descriptions and optimizes your resume to match requirements perfectly. The AI understands context, identifies key skills, and rephrases your experience to highlight relevant qualifications.',
+      description: 'Our AI analyzes job descriptions and optimizes your resume to match requirements perfectly. The AI understands context, identifies key skills, and rephrases your experience to highlight relevant qualifications.',
       benefits: [
         'Context-aware analysis of job requirements',
         'Intelligent keyword matching',
@@ -46,21 +72,21 @@ export function FeaturesPage() {
       title: 'Smart Job Parsing',
       description: 'Simply paste a job posting URL or text, and our AI extracts all critical information including requirements, responsibilities, qualifications, and preferred skills.',
       benefits: [
-        'Automatic web scraping from job URLs',
+        'Paste a URL - we extract everything automatically',
         'Extracts key requirements and skills',
         'Identifies job title, company, and location',
         'Understands structured and unstructured formats',
       ],
     },
     {
-      icon: <FileText className="h-8 w-8 text-purple-600 dark:text-purple-400" />,
-      title: 'Customizable Prompts',
-      description: 'Fine-tune how the AI tailors your resume with custom prompts. Adjust emphasis on technical skills, leadership experience, or industry-specific requirements.',
+      icon: <Edit className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />,
+      title: 'Full Resume Editor',
+      description: 'Edit every section of your resume directly in the app. Add, remove, or modify experience, education, skills, and more with our intuitive editor.',
       benefits: [
-        'Full control over AI behavior',
-        'Save and reuse custom prompts',
-        'Optimize for specific industries',
-        'Pro and Enterprise feature',
+        'Edit all resume sections',
+        'Toggle sections on/off as needed',
+        'Collapsible sections for easy navigation',
+        'Real-time preview of changes',
       ],
     },
     {
@@ -77,16 +103,16 @@ export function FeaturesPage() {
     {
       icon: <Shield className="h-8 w-8 text-red-600 dark:text-red-400" />,
       title: 'Secure Cloud Storage',
-      description: 'Your resumes are stored securely in Supabase cloud storage with encryption at rest. Access your files from anywhere, anytime.',
+      description: 'Your resumes are stored securely in the cloud. Access your files from anywhere, anytime, with enterprise-grade security.',
       benefits: [
-        'Encrypted storage',
+        'Secure cloud storage',
         'Automatic backups',
         'Access from any device',
-        'GDPR compliant',
+        'Privacy-focused design',
       ],
     },
     {
-      icon: <Zap className="h-8 w-8 text-yellow-600 dark:text-yellow-400" />,
+      icon: <Zap className="h-8 w-8 text-amber-600 dark:text-amber-400" />,
       title: 'Fast Processing',
       description: 'Get your tailored resume in seconds, not minutes. Our optimized AI pipeline processes resumes quickly without compromising quality.',
       benefits: [
@@ -109,7 +135,7 @@ export function FeaturesPage() {
     },
     {
       icon: <FileCheck className="h-5 w-5" />,
-      text: 'Multiple export formats (PDF, LaTeX, JSON)',
+      text: 'Professional PDF download',
     },
     {
       icon: <Settings className="h-5 w-5" />,
@@ -130,7 +156,7 @@ export function FeaturesPage() {
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto mb-8">
             Everything you need to create the perfect resume for every job application.
-            Powered by cutting-edge AI technology.
+            Powered by advanced AI technology.
           </p>
           <Button size="lg" onClick={handleGetStarted}>
             {user ? 'Go to Dashboard' : 'Get Started Free'}
@@ -207,19 +233,3 @@ export function FeaturesPage() {
     </PublicLayout>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

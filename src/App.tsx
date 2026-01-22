@@ -1,10 +1,14 @@
-import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { AuthModalProvider, useAuthModal } from '@/contexts/AuthModalContext'
+import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
+import { StripeProvider } from '@/contexts/StripeContext'
+import { TourProvider } from '@/contexts/TourContext'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AuthModal } from '@/components/AuthModal'
+import { CheckoutSuccessModal } from '@/components/CheckoutSuccessModal'
 import { LandingPage } from '@/pages/LandingPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { AccountSettingsPage } from '@/pages/AccountSettingsPage'
@@ -24,6 +28,29 @@ function ProtectedLayout() {
         <Outlet />
       </Layout>
     </ProtectedRoute>
+  )
+}
+
+// Checkout success handler component
+function CheckoutSuccessHandler() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('checkout') === 'success') {
+      setShowSuccessModal(true)
+      // Clear the URL param without causing a navigation
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('checkout')
+      setSearchParams(newParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
+  return (
+    <CheckoutSuccessModal
+      open={showSuccessModal}
+      onOpenChange={setShowSuccessModal}
+    />
   )
 }
 
@@ -80,9 +107,13 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AuthModalProvider>
-          <AuthModal />
-          <Routes>
+        <StripeProvider>
+          <SubscriptionProvider>
+            <AuthModalProvider>
+              <TourProvider>
+            <AuthModal />
+            <CheckoutSuccessHandler />
+            <Routes>
             <Route path="/login" element={<LoginRedirect />} />
             <Route path="/signup" element={<SignupRedirect />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -102,8 +133,11 @@ function App() {
               <Route path="account" element={<AccountSettingsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AuthModalProvider>
+            </Routes>
+              </TourProvider>
+            </AuthModalProvider>
+          </SubscriptionProvider>
+        </StripeProvider>
       </BrowserRouter>
     </AuthProvider>
   )

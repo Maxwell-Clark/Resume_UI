@@ -37,19 +37,19 @@ export function ContactPage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-4xl mx-auto py-12">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-slate-900 dark:text-slate-100 mb-4">
+      <div className="max-w-4xl mx-auto py-8 sm:py-12 px-4 sm:px-6">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 dark:text-slate-100 mb-4">
             Get in Touch
           </h1>
-          <p className="text-xl text-slate-600 dark:text-slate-400">
+          <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400">
             Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4 sm:mb-6">
               Contact Information
             </h2>
             <div className="space-y-6">
@@ -96,8 +96,8 @@ export function ContactPage() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4 sm:mb-6">
               Send us a Message
             </h2>
             

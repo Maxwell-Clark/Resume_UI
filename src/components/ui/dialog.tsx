@@ -93,7 +93,7 @@ export function Dialog({
         aria-describedby={description ? "dialog-description" : undefined}
         data-slot="dialog-content"
         className={cn(
-          "relative z-[101] w-full max-w-md rounded-lg border bg-white dark:bg-slate-800 shadow-xl outline-none",
+          "relative z-[101] w-[calc(100vw-2rem)] max-w-md max-h-[calc(100vh-4rem)] overflow-y-auto rounded-lg border bg-white dark:bg-slate-800 shadow-xl outline-none",
           "dark:border-slate-700",
           className
         )}

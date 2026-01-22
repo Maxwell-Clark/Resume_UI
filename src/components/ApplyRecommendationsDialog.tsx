@@ -124,6 +124,11 @@ export function ApplyRecommendationsDialog({
     recommendations.map(() => ({ selected: false, status: 'idle' }))
   )
   const [isApplying, setIsApplying] = useState(false)
+
+  // Sync recStates when recommendations change
+  useEffect(() => {
+    setRecStates(recommendations.map(() => ({ selected: false, status: 'idle' })))
+  }, [recommendations])
   const [activeSection, setActiveSection] = useState<SectionType>('summary')
   const [selectedEntries, setSelectedEntries] = useState<number[]>([])
 

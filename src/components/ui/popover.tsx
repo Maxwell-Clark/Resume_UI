@@ -1,5 +1,4 @@
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export type PopoverProps = {
@@ -27,7 +26,7 @@ export type PopoverProps = {
   closeOnOutsideClick?: boolean;
   /** Whether to close on Escape key */
   closeOnEsc?: boolean;
-  /** Mount container for the portal */
+  /** Mount container for the portal (unused in this implementation) */
   container?: Element | null;
   /** Whether to wrap trigger in a button (default: true). Set to false to use a div wrapper. */
   wrapInButton?: boolean;
@@ -39,6 +38,7 @@ export type PopoverProps = {
  * Popover — a rich dropdown that can host arbitrary content (forms, cards, divs).
  * - Accessible: focus management + Escape/outside click to dismiss.
  * - Layout options: side, align, offset.
+ * - Uses CSS-based positioning relative to trigger (no portals).
  */
 export function Popover({
   open: openProp,
@@ -53,7 +53,6 @@ export function Popover({
   children,
   closeOnOutsideClick = true,
   closeOnEsc = true,
-  container,
   wrapInButton = true,
   triggerClassName,
 }: PopoverProps) {
@@ -68,10 +67,7 @@ export function Popover({
     }
   }, [isControlled, onOpenChange]);
 
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
-
-  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
   // Close on Escape
@@ -89,135 +85,83 @@ export function Popover({
     if (!open || !closeOnOutsideClick) return;
     function onDocClick(e: MouseEvent) {
       const t = e.target as Node;
-      if (contentRef.current?.contains(t)) return;
-      if (triggerRef.current?.contains(t)) return;
+      if (containerRef.current?.contains(t)) return;
       setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open, closeOnOutsideClick, setOpen]);
 
-  // Simple positioning using the trigger rect
-  const [styles, setStyles] = React.useState<React.CSSProperties>({});
-  const position = React.useCallback(() => {
-    const btn = triggerRef.current;
-    const panel = contentRef.current;
-    if (!btn || !panel) return;
-    const r = btn.getBoundingClientRect();
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
+  // Calculate CSS positioning classes based on side and align
+  const getPositionStyles = (): React.CSSProperties => {
+    const styles: React.CSSProperties = {
+      position: 'absolute',
+      zIndex: 71,
+    };
 
-    let top = 0, left = 0;
-    if (side === "bottom") top = r.bottom + sideOffset + scrollY;
-    if (side === "top") top = r.top - panel.offsetHeight - sideOffset + scrollY;
-    if (side === "right") top = r.top + scrollY;
-    if (side === "left") top = r.top + scrollY;
-
-    if (side === "bottom" || side === "top") {
-      if (align === "start") left = r.left + scrollX;
-      if (align === "center") left = r.left + r.width / 2 - panel.offsetWidth / 2 + scrollX;
-      if (align === "end") left = r.right - panel.offsetWidth + scrollX;
-    } else {
-      // left/right sides
-      if (align === "start") left = side === "right" ? r.right + sideOffset + scrollX : r.left - panel.offsetWidth - sideOffset + scrollX;
-      if (align === "center") left = side === "right" ? r.right + sideOffset + scrollX : r.left - panel.offsetWidth - sideOffset + scrollX;
-      if (align === "end") left = side === "right" ? r.right + sideOffset + scrollX : r.left - panel.offsetWidth - sideOffset + scrollX;
-      // vertically center for left/right
-      top = r.top + r.height / 2 - panel.offsetHeight / 2 + scrollY;
+    // Side positioning
+    if (side === 'bottom') {
+      styles.top = `calc(100% + ${sideOffset}px)`;
+    } else if (side === 'top') {
+      styles.bottom = `calc(100% + ${sideOffset}px)`;
+    } else if (side === 'right') {
+      styles.left = `calc(100% + ${sideOffset}px)`;
+      styles.top = 0;
+    } else if (side === 'left') {
+      styles.right = `calc(100% + ${sideOffset}px)`;
+      styles.top = 0;
     }
 
-    setStyles({ position: "absolute", top, left });
-  }, [align, side, sideOffset]);
+    // Align positioning (for top/bottom sides)
+    if (side === 'bottom' || side === 'top') {
+      if (align === 'start') {
+        styles.left = 0;
+      } else if (align === 'center') {
+        styles.left = '50%';
+        styles.transform = 'translateX(-50%)';
+      } else if (align === 'end') {
+        styles.right = 0;
+      }
+    }
 
-  React.useEffect(() => {
-    if (!open) return;
-    position();
-    const onResize = () => position();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onResize, true);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onResize, true);
-    };
-  }, [open, position]);
+    // Align positioning (for left/right sides)
+    if (side === 'left' || side === 'right') {
+      if (align === 'start') {
+        styles.top = 0;
+      } else if (align === 'center') {
+        styles.top = '50%';
+        styles.transform = 'translateY(-50%)';
+      } else if (align === 'end') {
+        styles.bottom = 0;
+        styles.top = 'auto';
+      }
+    }
 
-  const triggerProps = {
-    ref: triggerRef as any,
-    "data-slot": "popover-trigger",
-    "aria-haspopup": "dialog" as const,
-    "aria-expanded": open,
-    onClick: () => setOpen(!open),
-    className: triggerClassName || (wrapInButton 
-      ? "inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      : "cursor-pointer"),
-    role: wrapInButton ? undefined : "button",
-    tabIndex: wrapInButton ? undefined : 0,
+    return styles;
   };
 
-  if (!mounted) {
-    if (wrapInButton) {
-      return (
-        <button
-          {...triggerProps}
-          ref={triggerRef as React.RefObject<HTMLButtonElement>}
-          type="button"
-        >
-          {trigger}
-        </button>
-      );
-    } else {
-      return (
-        <div {...triggerProps} ref={triggerRef as React.RefObject<HTMLDivElement>}>
-          {trigger}
-        </div>
-      );
-    }
-  }
-
-  const content = open ? (
-    <div data-slot="popover-root">
-      {/* Optional page overlay for emphasis (esp. mobile) */}
-      <div
-        data-slot="overlay"
-        className={cn(
-          "fixed inset-0 z-[70] bg-transparent md:bg-transparent",
-          overlayClassName
-        )}
-        aria-hidden="true"
-      />
-
-      <div
-        role="dialog"
-        aria-modal="false"
-        ref={contentRef}
-        data-slot="popover-content"
-        style={styles}
-        className={cn(
-          "z-[71] min-w-80 rounded-lg border bg-background p-0 shadow-xl outline-none",
-          contentClassName
-        )}
-      >
-        {children}
-      </div>
-    </div>
-  ) : null;
-
   const TriggerWrapper = wrapInButton ? 'button' : 'div';
-  const triggerWrapperProps = wrapInButton 
+  const triggerWrapperProps = wrapInButton
     ? { type: 'button' as const }
     : { role: 'button' as const, tabIndex: 0 };
 
   return (
-    <>
+    <div
+      ref={containerRef}
+      className="relative inline-block"
+      data-slot="popover-container"
+    >
       <TriggerWrapper
-        ref={triggerRef as any}
         {...triggerWrapperProps}
         data-slot="popover-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={triggerClassName || (wrapInButton 
-          ? "inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          : "cursor-pointer")}
+        className={cn(
+          triggerClassName || (wrapInButton
+            ? "inline-flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            : "cursor-pointer"),
+          open && "relative z-[72]"
+        )}
         onClick={() => setOpen(!open)}
         onKeyDown={(e: React.KeyboardEvent) => {
           if (!wrapInButton && (e.key === 'Enter' || e.key === ' ')) {
@@ -228,8 +172,35 @@ export function Popover({
       >
         {trigger}
       </TriggerWrapper>
-      {createPortal(content as React.ReactNode, (container ?? document.body) as Element)}
-    </>
+
+      {open && (
+        <>
+          {/* Overlay to catch outside clicks */}
+          <div
+            data-slot="overlay"
+            className={cn(
+              "fixed inset-0 z-[70] bg-transparent",
+              overlayClassName
+            )}
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+
+          <div
+            role="dialog"
+            aria-modal="false"
+            ref={contentRef}
+            data-slot="popover-content"
+            style={getPositionStyles()}
+            className={cn(
+              "min-w-0 rounded-lg border bg-background p-0 shadow-xl outline-none",
+              contentClassName
+            )}
+          >
+            {children}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
-

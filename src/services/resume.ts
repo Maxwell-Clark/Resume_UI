@@ -1,4 +1,5 @@
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
+import type { ResumeContent, PersonInfo, WorkEntry, EducationEntry, SkillCategory } from '@/types/resume'
 
 export interface Resume {
   id: string
@@ -16,15 +17,17 @@ export interface ResumeCreate {
 
 export interface ResumeUpdate {
   name?: string
-  content?: any
+  content?: Partial<ResumeContent>
 }
 
 export interface ParsedResume {
-  person: any
-  experience: any[]
-  education: any[]
-  skills: any[]
-  [key: string]: any
+  person?: PersonInfo
+  basics?: PersonInfo
+  experience?: WorkEntry[]
+  work?: WorkEntry[]
+  education?: EducationEntry[]
+  skills?: SkillCategory[]
+  [key: string]: unknown
 }
 
 export interface JobData {
@@ -32,7 +35,7 @@ export interface JobData {
   company: string
   description: string
   requirements: string[]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface MatchResponse {

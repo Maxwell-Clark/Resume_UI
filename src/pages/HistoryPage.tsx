@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star, Eye } from 'lucide-react'
+import { Tooltip } from '@/components/ui/tooltip'
+import { GuidedTour } from '@/components/GuidedTour'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover } from '@/components/ui/popover'
@@ -265,15 +267,20 @@ const EditableDate = ({
   const [isSaving, setIsSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Convert ISO string to date input format (YYYY-MM-DD)
+  // Convert ISO string to date input format (YYYY-MM-DD) in local timezone
   const dateToInputValue = (isoString: string) => {
     const date = new Date(isoString)
-    return date.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
-  // Convert date input value to ISO string (preserving time as start of day)
+  // Convert date input value to ISO string (preserving the local date)
   const inputValueToIso = (inputValue: string) => {
-    const date = new Date(inputValue)
+    // Parse as local date by adding time component
+    const [year, month, day] = inputValue.split('-').map(Number)
+    const date = new Date(year, month - 1, day, 12, 0, 0) // Use noon to avoid DST issues
     return date.toISOString()
   }
 
@@ -318,8 +325,8 @@ const EditableDate = ({
 
   if (isEditing) {
     return (
-      <div className="flex items-center gap-2 text-xs">
-        <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+      <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+        <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
         <span className="text-slate-600 dark:text-slate-400">
           <strong>{label}:</strong>
         </span>
@@ -338,8 +345,8 @@ const EditableDate = ({
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+    <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+      <Icon className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
       <span className="text-slate-600 dark:text-slate-400">
         <strong>{label}:</strong>{' '}
         <span
@@ -570,7 +577,7 @@ export function HistoryPage() {
 
   useEffect(() => {
     // Check if navigation state has forceRefresh flag or if there's a pending tailoring ID
-    const navState = location.state as any
+    const navState = location.state as { forceRefresh?: boolean } | null
     const pendingId = localStorage.getItem('pending_tailoring_id')
     const forceRefresh = navState?.forceRefresh === true || !!pendingId
     loadInitialHistory(forceRefresh)
@@ -841,6 +848,14 @@ export function HistoryPage() {
     })
   }
 
+  const formatDateCompact = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+  }
+
   const _formatStatusDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', {
@@ -853,10 +868,10 @@ export function HistoryPage() {
 
   const getStatusHistory = (item: HistoryItem) => {
     if (!item.status_dates) return []
-    
-    // Define the order we want to show statuses
-    const statusOrder: EditableStatus[] = ['tailored', 'applied', 'interviewing', 'rejected', 'ghosted', 'hired']
-    
+
+    // Define the order we want to show statuses (excludes 'tailored' since that's represented by the created date)
+    const statusOrder: EditableStatus[] = ['applied', 'interviewing', 'rejected', 'ghosted', 'hired']
+
     return statusOrder
       .filter(status => item.status_dates?.[status])
       .map(status => ({
@@ -913,9 +928,9 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl px-4 sm:px-6">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume History</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume History</h1>
         <p className="text-slate-600 dark:text-slate-400">View and download your previously tailored resumes</p>
       </div>
 
@@ -1077,7 +1092,7 @@ export function HistoryPage() {
                   )}
                   <div
                     className={cn(
-                      "bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-6 relative transition-all duration-300",
+                      "bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-3 sm:p-6 relative transition-all duration-300",
                       isNew
                         ? "border-2 border-transparent bg-gradient-to-r from-white to-white dark:from-slate-800 dark:to-slate-800 animate-border-glow"
                         : "border-slate-200 dark:border-slate-700"
@@ -1085,50 +1100,72 @@ export function HistoryPage() {
                     onMouseEnter={() => isNew && markAsSeen(item.id)}
                   >
               {isNew && (
-                <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md animate-pulse">
+                <span
+                  className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md animate-pulse"
+                  data-tour="new-badge"
+                >
                   NEW
                 </span>
               )}
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex items-start gap-3 sm:gap-4 flex-1">
+                  <div className="hidden sm:flex p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg shrink-0">
                     <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-1">
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 break-words">
                         {item.file_name}
                       </h3>
-                      <StatusBadge 
-                        status={item.status} 
-                        onStatusChange={(newStatus) => handleStatusChange(item.id, newStatus)}
-                      />
+                      <div data-tour={index === 0 ? "status-dropdown" : undefined}>
+                        {index === 0 && (
+                          <Tooltip content="Track progress: Tailored > Applied > Interviewing > Result">
+                            <span className="sr-only">Status help</span>
+                          </Tooltip>
+                        )}
+                        <StatusBadge
+                          status={item.status}
+                          onStatusChange={(newStatus) => handleStatusChange(item.id, newStatus)}
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                      <EditableText
-                        value={item.job_title}
-                        onSave={(newValue) => handleFieldUpdate(item.id, 'job_title', newValue)}
-                        label="Job Title"
-                      />
-                      <EditableText
-                        value={item.company}
-                        onSave={(newValue) => handleFieldUpdate(item.id, 'company', newValue)}
-                        label="Company"
-                      />
+                      {/* Mobile: Compact single-line job info */}
+                      <p className="sm:hidden text-sm" data-tour={index === 0 ? "editable-field" : undefined}>
+                        {item.job_title} @ {item.company}
+                      </p>
+                      {/* Desktop: Editable fields with labels */}
+                      <div className="hidden sm:block" data-tour={index === 0 ? "editable-field" : undefined}>
+                        <EditableText
+                          value={item.job_title}
+                          onSave={(newValue) => handleFieldUpdate(item.id, 'job_title', newValue)}
+                          label="Job Title"
+                        />
+                      </div>
+                      <div className="hidden sm:block">
+                        <EditableText
+                          value={item.company}
+                          onSave={(newValue) => handleFieldUpdate(item.id, 'company', newValue)}
+                          label="Company"
+                        />
+                      </div>
+                      {/* Original resume name - hidden on mobile */}
                       {item.original_resume_name && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400">
                           <strong>Original:</strong> {item.original_resume_name}
                         </p>
                       )}
-                      <div className="flex items-center gap-2 mt-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>Created: {formatDate(item.created_at)}</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2 mt-1 sm:mt-2">
+                        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <span className="sm:hidden text-xs">{formatDateCompact(item.created_at)}</span>
+                        <span className="hidden sm:inline">Created: {formatDate(item.created_at)}</span>
                       </div>
+                      {/* Status History - hidden on mobile */}
                       {(() => {
                         const statusHistory = getStatusHistory(item)
                         if (statusHistory.length > 0) {
                           return (
-                            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <div className="hidden sm:block mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                               <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Status History:</p>
                               <div className="space-y-1.5">
                                 {statusHistory.map(({ status, date, label }) => {
@@ -1153,68 +1190,78 @@ export function HistoryPage() {
                     </div>
                   </div>
                 </div>
-                <div className="ml-4 flex flex-col gap-2">
-                  <button
-                    onClick={() => handleToggleFavorite(item.id, item.favorited)}
-                    className="self-end p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    title={item.favorited ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <Star 
-                      className={cn(
-                        "h-5 w-5 transition-colors",
-                        item.favorited 
-                          ? "fill-yellow-400 text-yellow-400" 
-                          : "text-slate-400 dark:text-slate-500 hover:text-yellow-400"
+                <div className="flex flex-col gap-2 sm:ml-4">
+                  <div className="flex items-center justify-between sm:justify-end mb-1 sm:mb-0" data-tour={index === 0 ? "favorite-star" : undefined}>
+                    <Tooltip content="Pin important applications to top">
+                      <button
+                        onClick={() => handleToggleFavorite(item.id, item.favorited)}
+                        className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        title={item.favorited ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <Star
+                          className={cn(
+                            "h-5 w-5 transition-colors",
+                            item.favorited
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-slate-400 dark:text-slate-500 hover:text-yellow-400"
+                          )}
+                        />
+                      </button>
+                    </Tooltip>
+                  </div>
+                  <div className="flex gap-1 sm:grid sm:grid-cols-1 sm:gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewItem(item)
+                        setPreviewOpen(true)
+                      }}
+                      disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
+                      className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span className="hidden sm:inline">Preview</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(item)}
+                      disabled={(!item.download_url && !item.resume_id) || importingId === item.id || (item.status === 'tailoring' || item.status === 'failed')}
+                      className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2"
+                    >
+                      {importingId === item.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Edit className="h-4 w-4" />
                       )}
-                    />
-                  </button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setPreviewItem(item)
-                      setPreviewOpen(true)
-                    }}
-                    disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
-                    className="flex items-center gap-2 w-full justify-start"
-                  >
-                    <Eye className="h-4 w-4" />
-                    Preview
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleEdit(item)}
-                    disabled={(!item.download_url && !item.resume_id) || importingId === item.id || (item.status === 'tailoring' || item.status === 'failed')}
-                    className="flex items-center gap-2 w-full justify-start"
-                  >
-                    {importingId === item.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Edit className="h-4 w-4" />
-                    )}
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => item.download_url && window.open(item.download_url, '_blank')}
-                    disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
-                    className="flex items-center gap-2 w-full justify-start"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDeleteClick(item)}
-                    disabled={deletingId === item.id}
-                    className="flex items-center gap-2 w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  >
-                    {deletingId === item.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    Delete
-                  </Button>
+                      <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => item.download_url && window.open(item.download_url, '_blank')}
+                      disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
+                      className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span className="hidden sm:inline">Download</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteClick(item)}
+                      disabled={deletingId === item.id}
+                      className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      {deletingId === item.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      <span className="hidden sm:inline">Delete</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1322,6 +1369,9 @@ export function HistoryPage() {
           )}
         </div>
       </Dialog>
+
+      {/* Guided Tour */}
+      <GuidedTour tourId="history" />
     </div>
   )
 }

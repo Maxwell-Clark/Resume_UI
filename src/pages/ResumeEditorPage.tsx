@@ -1,88 +1,34 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { resumeService, generateRetailorPrompt, type ParsedResume, type JobData, type MatchResponse } from '@/services/resume'
 import type { Resume } from '@/services/resume'
 import { getHistoryItemByResumeId, getHistoryItemById, updateHistoryItem, type HistoryItem, type MatchResults } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { ProButton } from '@/components/ProFeatureGate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages, ChevronDown, ChevronRight, Target, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Wand2, RefreshCw } from 'lucide-react'
+import { Tooltip } from '@/components/ui/tooltip'
+import { GuidedTour } from '@/components/GuidedTour'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages, ChevronDown, ChevronRight, Target, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Wand2, RefreshCw, HelpCircle } from 'lucide-react'
 import { AIEditDialog } from '@/components/AIEditDialog'
 import { ApplyRecommendationsDialog } from '@/components/ApplyRecommendationsDialog'
 import { NewMatchDialog } from '@/components/NewMatchDialog'
 import { Dialog } from '@/components/ui/dialog'
-
-// Type definitions
-type WorkEntry = {
-  name: string
-  position: string
-  location?: string
-  startDate?: string
-  endDate?: string
-  summary?: string
-  highlights: string[]
-}
-
-type EducationEntry = {
-  institution: string
-  studyType?: string
-  area?: string
-  startDate?: string
-  endDate?: string
-  gpa?: string
-  details: string[]
-}
-
-type SkillCategory = {
-  name: string
-  keywords: string[]
-}
-
-type ProjectEntry = {
-  name: string
-  description?: string
-  url?: string
-  startDate?: string
-  endDate?: string
-  highlights: string[]
-}
-
-type CertificationEntry = {
-  name: string
-  issuer?: string
-  date?: string
-}
-
-type AwardEntry = {
-  title: string
-  date?: string
-  awarder?: string
-  summary?: string
-}
-
-type VolunteerEntry = {
-  organization: string
-  position?: string
-  startDate?: string
-  endDate?: string
-  summary?: string
-  highlights: string[]
-}
-
-type PublicationEntry = {
-  name: string
-  publisher?: string
-  releaseDate?: string
-  url?: string
-  summary?: string
-}
-
-type LanguageEntry = {
-  language: string
-  fluency?: string
-}
+import type {
+  WorkEntry,
+  EducationEntry,
+  SkillCategory,
+  ProjectEntry,
+  CertificationEntry,
+  AwardEntry,
+  VolunteerEntry,
+  PublicationEntry,
+  LanguageEntry,
+  ResumeContent,
+} from '@/types/resume'
 
 export function ResumeEditorPage() {
   const { id } = useParams()
@@ -148,6 +94,14 @@ export function ResumeEditorPage() {
   // Quick rematch state
   const [isRematching, setIsRematching] = useState(false)
 
+  // Match panel drawer state - auto-open on large screens
+  const [matchPanelOpen, setMatchPanelOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024 // lg breakpoint
+    }
+    return false
+  })
+
   // Match analysis collapsible sections state
   const [matchSectionsExpanded, setMatchSectionsExpanded] = useState<{
     strengths: boolean
@@ -179,9 +133,18 @@ export function ResumeEditorPage() {
     })
   }
 
+  const expandSection = (section: string) => {
+    setExpandedSections(prev => {
+      if (prev.has(section)) return prev
+      const newSet = new Set(prev)
+      newSet.add(section)
+      return newSet
+    })
+  }
+
   // Build current resume content from state (matching the format used in handleSave)
   const buildResumeContent = useCallback((): ParsedResume => {
-    const content: any = {}
+    const content: ResumeContent = {}
 
     // Build basics - matching handleSave structure
     content.basics = {}
@@ -326,7 +289,7 @@ export function ResumeEditorPage() {
       const fileName = `${resumeName || 'Resume'}_Tailored_${Date.now()}`
 
       const result = await resumeService.tailorResume(
-        resumeContent as any,
+        resumeContent as ParsedResume,
         job,
         fileName,
         historyItem?.id,
@@ -475,34 +438,36 @@ export function ResumeEditorPage() {
       setResumeName(nameToUse)
       
       if (data.content) {
-        const content = data.content
-        
+        const content = data.content as ResumeContent
+
         // Load basics
         if (content.basics) {
+          const basics = content.basics as Record<string, unknown>
           setBasics({
-            name: (content.basics as any).name || '',
-            email: (content.basics as any).email || '',
-            phone: (content.basics as any).phone || '',
-            summary: (content.basics as any).summary || '',
-            location: typeof (content.basics as any).location === 'string' 
-              ? (content.basics as any).location 
-              : (content.basics as any).location?.address || '',
-            website: (content.basics as any).website || ''
+            name: (basics.name as string) || '',
+            email: (basics.email as string) || '',
+            phone: (basics.phone as string) || '',
+            summary: (basics.summary as string) || '',
+            location: typeof basics.location === 'string'
+              ? basics.location
+              : ((basics.location as Record<string, unknown>)?.address as string) || '',
+            website: (basics.website as string) || ''
           })
         } else if (content.person) {
+          const person = content.person as Record<string, unknown>
           setBasics({
-            name: (content.person as any).name || '',
-            email: (content.person as any).email || '',
-            phone: (content.person as any).phone || '',
-            summary: (content as any).summary || '',
-            location: (content.person as any).location || '',
-            website: (content.person as any).links?.[0] || ''
+            name: (person.name as string) || '',
+            email: (person.email as string) || '',
+            phone: (person.phone as string) || '',
+            summary: ((content as Record<string, unknown>).summary as string) || '',
+            location: (person.location as string) || '',
+            website: ((person.links as string[])?.[0]) || ''
           })
         }
 
         // Load work/experience
         if (content.work && Array.isArray(content.work)) {
-          setWork(content.work.map((w: any) => ({
+          setWork(content.work.map((w) => ({
             name: w.name || '',
             position: w.position || '',
             location: w.location || '',
@@ -512,20 +477,21 @@ export function ResumeEditorPage() {
             highlights: Array.isArray(w.highlights) ? w.highlights : []
           })))
         } else if (content.experience && Array.isArray(content.experience)) {
-          setWork(content.experience.map((exp: any) => ({
-            name: exp.company || '',
-            position: exp.title || '',
-            location: exp.location || '',
-            startDate: exp.start_date || '',
-            endDate: exp.end_date || '',
+          const expData = content.experience as unknown as Array<Record<string, unknown>>
+          setWork(expData.map((exp) => ({
+            name: (exp.company as string) || '',
+            position: (exp.title as string) || '',
+            location: (exp.location as string) || '',
+            startDate: (exp.start_date as string) || '',
+            endDate: (exp.end_date as string) || '',
             summary: '',
-            highlights: Array.isArray(exp.bullets) ? exp.bullets : []
+            highlights: Array.isArray(exp.bullets) ? exp.bullets as string[] : []
           })))
         }
 
         // Load education
         if (content.education && Array.isArray(content.education)) {
-          setEducation(content.education.map((edu: any) => ({
+          setEducation(content.education.map((edu) => ({
             institution: edu.institution || '',
             studyType: edu.studyType || '',
             area: edu.area || '',
@@ -539,22 +505,23 @@ export function ResumeEditorPage() {
         // Load skills
         if (content.skills) {
           if (Array.isArray(content.skills)) {
-            setSkills(content.skills.map((skill: any) => ({
+            setSkills(content.skills.map((skill) => ({
               name: skill.name || '',
               keywords: Array.isArray(skill.keywords) ? skill.keywords : []
             })))
           } else if (typeof content.skills === 'object') {
             // Legacy format: skills as object with category keys
-            setSkills(Object.entries(content.skills).map(([name, keywords]) => ({
+            const skillsObj = content.skills as Record<string, unknown>
+            setSkills(Object.entries(skillsObj).map(([name, keywords]) => ({
               name,
-              keywords: Array.isArray(keywords) ? keywords : []
+              keywords: Array.isArray(keywords) ? keywords as string[] : []
             })))
           }
         }
 
         // Load projects
         if (content.projects && Array.isArray(content.projects)) {
-          setProjects(content.projects.map((proj: any) => ({
+          setProjects(content.projects.map((proj) => ({
             name: proj.name || '',
             description: proj.description || '',
             url: proj.url || '',
@@ -565,8 +532,9 @@ export function ResumeEditorPage() {
         }
 
         // Load certifications
-        if (content.certifications && Array.isArray(content.certifications)) {
-          setCertifications(content.certifications.map((cert: any) => ({
+        const certs = content.certifications || content.certificates
+        if (certs && Array.isArray(certs)) {
+          setCertifications(certs.map((cert) => ({
             name: cert.name || '',
             issuer: cert.issuer || '',
             date: cert.date || ''
@@ -575,7 +543,7 @@ export function ResumeEditorPage() {
 
         // Load awards
         if (content.awards && Array.isArray(content.awards)) {
-          setAwards(content.awards.map((award: any) => ({
+          setAwards(content.awards.map((award) => ({
             title: award.title || '',
             date: award.date || '',
             awarder: award.awarder || '',
@@ -585,7 +553,7 @@ export function ResumeEditorPage() {
 
         // Load volunteer
         if (content.volunteer && Array.isArray(content.volunteer)) {
-          setVolunteer(content.volunteer.map((vol: any) => ({
+          setVolunteer(content.volunteer.map((vol) => ({
             organization: vol.organization || '',
             position: vol.position || '',
             startDate: vol.startDate || '',
@@ -597,7 +565,7 @@ export function ResumeEditorPage() {
 
         // Load publications
         if (content.publications && Array.isArray(content.publications)) {
-          setPublications(content.publications.map((pub: any) => ({
+          setPublications(content.publications.map((pub) => ({
             name: pub.name || '',
             publisher: pub.publisher || '',
             releaseDate: pub.releaseDate || '',
@@ -608,7 +576,7 @@ export function ResumeEditorPage() {
 
         // Load languages
         if (content.languages && Array.isArray(content.languages)) {
-          setLanguages(content.languages.map((lang: any) => ({
+          setLanguages(content.languages.map((lang) => ({
             language: lang.language || '',
             fluency: lang.fluency || ''
           })))
@@ -630,7 +598,7 @@ export function ResumeEditorPage() {
       
       // Build updatedContent from scratch using only form data
       // Don't copy original content to avoid including fields not in the form
-      const updatedContent: any = {}
+      const updatedContent: ResumeContent = {}
       
       // Update basics - only include non-empty fields, but ensure name exists
       updatedContent.basics = {}
@@ -838,9 +806,10 @@ export function ResumeEditorPage() {
   // Helper functions for managing arrays
   const addWorkEntry = () => {
     setWork([...work, { name: '', position: '', highlights: [] }])
+    expandSection('work')
   }
 
-  const updateWorkEntry = (index: number, field: keyof WorkEntry, value: any) => {
+  const updateWorkEntry = (index: number, field: keyof WorkEntry, value: string | string[]) => {
     const updated = [...work]
     updated[index] = { ...updated[index], [field]: value }
     setWork(updated)
@@ -870,9 +839,10 @@ export function ResumeEditorPage() {
 
   const addEducationEntry = () => {
     setEducation([...education, { institution: '', details: [] }])
+    expandSection('education')
   }
 
-  const updateEducationEntry = (index: number, field: keyof EducationEntry, value: any) => {
+  const updateEducationEntry = (index: number, field: keyof EducationEntry, value: string | string[]) => {
     const updated = [...education]
     updated[index] = { ...updated[index], [field]: value }
     setEducation(updated)
@@ -902,9 +872,10 @@ export function ResumeEditorPage() {
 
   const addSkillCategory = () => {
     setSkills([...skills, { name: '', keywords: [] }])
+    expandSection('skills')
   }
 
-  const updateSkillCategory = (index: number, field: keyof SkillCategory, value: any) => {
+  const updateSkillCategory = (index: number, field: keyof SkillCategory, value: string | string[]) => {
     const updated = [...skills]
     updated[index] = { ...updated[index], [field]: value }
     setSkills(updated)
@@ -934,9 +905,10 @@ export function ResumeEditorPage() {
 
   const addProjectEntry = () => {
     setProjects([...projects, { name: '', highlights: [] }])
+    expandSection('projects')
   }
 
-  const updateProjectEntry = (index: number, field: keyof ProjectEntry, value: any) => {
+  const updateProjectEntry = (index: number, field: keyof ProjectEntry, value: string | string[]) => {
     const updated = [...projects]
     updated[index] = { ...updated[index], [field]: value }
     setProjects(updated)
@@ -966,6 +938,7 @@ export function ResumeEditorPage() {
 
   const addCertificationEntry = () => {
     setCertifications([...certifications, { name: '' }])
+    expandSection('certifications')
   }
 
   const updateCertificationEntry = (index: number, field: keyof CertificationEntry, value: string) => {
@@ -981,6 +954,7 @@ export function ResumeEditorPage() {
   // Award handlers
   const addAwardEntry = () => {
     setAwards([...awards, { title: '' }])
+    expandSection('awards')
   }
 
   const updateAwardEntry = (index: number, field: keyof AwardEntry, value: string) => {
@@ -996,9 +970,10 @@ export function ResumeEditorPage() {
   // Volunteer handlers
   const addVolunteerEntry = () => {
     setVolunteer([...volunteer, { organization: '', highlights: [] }])
+    expandSection('volunteer')
   }
 
-  const updateVolunteerEntry = (index: number, field: keyof VolunteerEntry, value: any) => {
+  const updateVolunteerEntry = (index: number, field: keyof VolunteerEntry, value: string | string[]) => {
     const updated = [...volunteer]
     updated[index] = { ...updated[index], [field]: value }
     setVolunteer(updated)
@@ -1029,6 +1004,7 @@ export function ResumeEditorPage() {
   // Publication handlers
   const addPublicationEntry = () => {
     setPublications([...publications, { name: '' }])
+    expandSection('publications')
   }
 
   const updatePublicationEntry = (index: number, field: keyof PublicationEntry, value: string) => {
@@ -1044,6 +1020,7 @@ export function ResumeEditorPage() {
   // Language handlers
   const addLanguageEntry = () => {
     setLanguages([...languages, { language: '' }])
+    expandSection('languages')
   }
 
   const updateLanguageEntry = (index: number, field: keyof LanguageEntry, value: string) => {
@@ -1178,15 +1155,15 @@ export function ResumeEditorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="mb-8">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="mb-6 sm:mb-8">
         <div className="flex items-center gap-4 mb-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/history')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </div>
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Edit {resumeName || resume.name}</h1>
+          <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2 break-words">Edit {resumeName || resume.name}</h1>
           <p className="text-slate-600 dark:text-slate-400">
             Last updated: {new Date(resume.updated_at).toLocaleDateString()}
           </p>
@@ -1194,8 +1171,8 @@ export function ResumeEditorPage() {
       </div>
 
       {/* Top Toolbar */}
-      <div className="mb-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4">
-        <div className="flex items-center justify-between gap-4">
+      <div className="mb-4 sm:mb-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           {/* Resume Name Editor */}
           <div className="flex items-center gap-2 flex-1">
             {isEditingName ? (
@@ -1251,53 +1228,82 @@ export function ResumeEditorPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             {historyItem?.download_url && (
               <>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setPreviewOpen(true)}
                   className="flex items-center gap-2"
                 >
                   <Eye className="h-4 w-4" />
-                  Preview
+                  <span className="hidden sm:inline">Preview</span>
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => window.open(historyItem.download_url, '_blank')}
                   className="flex items-center gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  Download PDF
+                  <span className="hidden sm:inline">Download PDF</span>
                 </Button>
               </>
             )}
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
+            <div data-tour="save-button">
+              <Tooltip content="Save changes and regenerate PDF">
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  size="sm"
+                  className="flex items-center gap-2 sm:size-default"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="hidden sm:inline">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span className="hidden sm:inline">Save Changes</span>
+                    </>
+                  )}
+                </Button>
+              </Tooltip>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-6">
-        {/* Main Editor Column */}
-        <div className="flex-1 space-y-8">
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Mobile Toggle Button - only on <lg */}
+        <button
+          onClick={() => setMatchPanelOpen(!matchPanelOpen)}
+          className="lg:hidden fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-blue-600 text-white p-2 rounded-l-lg shadow-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+          aria-label={matchPanelOpen ? "Close match panel" : "Open match panel"}
+        >
+          <Target className="h-5 w-5" />
+          {matchPanelOpen ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4 -rotate-90" />
+          )}
+        </button>
+
+        {/* Backdrop (when panel open on mobile/tablet) */}
+        {matchPanelOpen && (
+          <div
+            className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+            onClick={() => setMatchPanelOpen(false)}
+          />
+        )}
+
+        {/* Main Editor Column - full width on mobile, flex-1 on desktop */}
+        <div className="flex-1 min-w-0 space-y-8">
         {/* Basics Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
             className="flex items-center gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('basics')}
@@ -1349,18 +1355,29 @@ export function ResumeEditorPage() {
                 onChange={(e) => setBasics({ ...basics, website: e.target.value })}
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2 md:col-span-2" data-tour="summary-field">
               <div className="flex items-center justify-between">
-                <Label htmlFor="summary">Professional Summary</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleAIEdit('basics_summary', 'Professional Summary', basics.summary)}
-                  className="h-8 px-2"
-                >
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  AI Edit
-                </Button>
+                <Label htmlFor="summary" className="flex items-center gap-2">
+                  Professional Summary
+                  <Tooltip content="2-3 sentences of key qualifications">
+                    <HelpCircle className="h-4 w-4 text-slate-400" />
+                  </Tooltip>
+                </Label>
+                <div data-tour="ai-edit-button">
+                  <Tooltip content="Use AI to improve this text">
+                    <ProButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAIEdit('basics_summary', 'Professional Summary', basics.summary)}
+                      className="h-8 px-2"
+                      featureName="AI Edit"
+                      featureDescription="Use AI to improve your professional summary. Get intelligent suggestions to make your resume stand out."
+                    >
+                      <Sparkles className="h-4 w-4 mr-1" />
+                      AI Edit
+                    </ProButton>
+                  </Tooltip>
+                </div>
               </div>
               <Textarea
                 id="summary"
@@ -1374,9 +1391,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Experience Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('work')}
           >
             <div className="flex items-center gap-2">
@@ -1385,7 +1402,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('work') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addWorkEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Experience
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Experience</span>
             </Button>
           </div>
           {expandedSections.has('work') && (
@@ -1395,7 +1412,7 @@ export function ResumeEditorPage() {
           ) : (
             <div className="space-y-6">
               {work.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div key={index} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <h3 className="font-medium text-slate-900 dark:text-slate-100">Experience #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeWorkEntry(index)}>
@@ -1430,31 +1447,46 @@ export function ResumeEditorPage() {
                     <div className="space-y-2">
                       <Label>Start Date</Label>
                       <Input
+                        type="date"
                         value={entry.startDate || ''}
                         onChange={(e) => updateWorkEntry(index, 'startDate', e.target.value)}
-                        placeholder="YYYY-MM or YYYY"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
-                      <Input
-                        value={entry.endDate || ''}
-                        onChange={(e) => updateWorkEntry(index, 'endDate', e.target.value)}
-                        placeholder="YYYY-MM, YYYY, or Present"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={entry.endDate === 'Present' ? '' : (entry.endDate || '')}
+                          onChange={(e) => updateWorkEntry(index, 'endDate', e.target.value)}
+                          disabled={entry.endDate === 'Present'}
+                          className={entry.endDate === 'Present' ? 'opacity-50' : ''}
+                        />
+                        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={entry.endDate === 'Present'}
+                            onChange={(e) => updateWorkEntry(index, 'endDate', e.target.checked ? 'Present' : '')}
+                            className="rounded border-slate-300 dark:border-slate-600"
+                          />
+                          Present
+                        </label>
+                      </div>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <div className="flex items-center justify-between">
                         <Label>Summary</Label>
-                        <Button
+                        <ProButton
                           variant="ghost"
                           size="sm"
                           onClick={() => handleAIEdit('work_summary', `Work Summary - ${entry.name}`, entry.summary || '', index)}
                           className="h-8 px-2"
+                          featureName="AI Edit"
+                          featureDescription="Use AI to enhance your work summary. Get suggestions to better highlight your achievements."
                         >
                           <Sparkles className="h-4 w-4 mr-1" />
                           AI Edit
-                        </Button>
+                        </ProButton>
                       </div>
                       <Textarea
                         value={entry.summary || ''}
@@ -1478,15 +1510,16 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateHighlight(index, hIndex, e.target.value)}
                           placeholder="Bullet point"
                         />
-                        <Button
+                        <ProButton
                           variant="ghost"
                           size="sm"
                           onClick={() => handleAIEdit('work_highlight', `Work Highlight - ${entry.name}`, highlight, index, hIndex)}
                           className="h-8 px-2"
-                          title="AI Edit"
+                          featureName="AI Edit"
+                          featureDescription="Use AI to improve this bullet point. Make your achievements more impactful."
                         >
                           <Sparkles className="h-4 w-4" />
-                        </Button>
+                        </ProButton>
                         <Button variant="ghost" size="sm" onClick={() => removeHighlight(index, hIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -1502,9 +1535,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Education Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('education')}
           >
             <div className="flex items-center gap-2">
@@ -1513,7 +1546,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('education') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addEducationEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Education
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Education</span>
             </Button>
           </div>
           {expandedSections.has('education') && (
@@ -1523,7 +1556,7 @@ export function ResumeEditorPage() {
           ) : (
             <div className="space-y-6">
               {education.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div key={index} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <h3 className="font-medium text-slate-900 dark:text-slate-100">Education #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeEducationEntry(index)}>
@@ -1558,18 +1591,31 @@ export function ResumeEditorPage() {
                     <div className="space-y-2">
                       <Label>Start Date</Label>
                       <Input
+                        type="date"
                         value={entry.startDate || ''}
                         onChange={(e) => updateEducationEntry(index, 'startDate', e.target.value)}
-                        placeholder="YYYY-MM or YYYY"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
-                      <Input
-                        value={entry.endDate || ''}
-                        onChange={(e) => updateEducationEntry(index, 'endDate', e.target.value)}
-                        placeholder="YYYY-MM or YYYY"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={entry.endDate === 'Present' ? '' : (entry.endDate || '')}
+                          onChange={(e) => updateEducationEntry(index, 'endDate', e.target.value)}
+                          disabled={entry.endDate === 'Present'}
+                          className={entry.endDate === 'Present' ? 'opacity-50' : ''}
+                        />
+                        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={entry.endDate === 'Present'}
+                            onChange={(e) => updateEducationEntry(index, 'endDate', e.target.checked ? 'Present' : '')}
+                            className="rounded border-slate-300 dark:border-slate-600"
+                          />
+                          Present
+                        </label>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label>GPA</Label>
@@ -1594,15 +1640,16 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateEducationDetail(index, dIndex, e.target.value)}
                           placeholder="Coursework, honors, thesis, etc."
                         />
-                        <Button
+                        <ProButton
                           variant="ghost"
                           size="sm"
                           onClick={() => handleAIEdit('education_detail', `Education Detail - ${entry.institution}`, detail, undefined, undefined, index, dIndex)}
                           className="h-8 px-2"
-                          title="AI Edit"
+                          featureName="AI Edit"
+                          featureDescription="Use AI to enhance your education details. Highlight your academic achievements."
                         >
                           <Sparkles className="h-4 w-4" />
-                        </Button>
+                        </ProButton>
                         <Button variant="ghost" size="sm" onClick={() => removeEducationDetail(index, dIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -1618,9 +1665,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Skills Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('skills')}
           >
             <div className="flex items-center gap-2">
@@ -1629,7 +1676,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('skills') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addSkillCategory(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Category
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Category</span>
             </Button>
           </div>
           {expandedSections.has('skills') && (
@@ -1639,7 +1686,7 @@ export function ResumeEditorPage() {
           ) : (
             <div className="space-y-6">
               {skills.map((category, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div key={index} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 space-y-2">
                       <Label>Category Name</Label>
@@ -1682,9 +1729,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Projects Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('projects')}
           >
             <div className="flex items-center gap-2">
@@ -1693,7 +1740,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('projects') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addProjectEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Project
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Project</span>
             </Button>
           </div>
           {expandedSections.has('projects') && (
@@ -1703,7 +1750,7 @@ export function ResumeEditorPage() {
           ) : (
             <div className="space-y-6">
               {projects.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div key={index} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <h3 className="font-medium text-slate-900 dark:text-slate-100">Project #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeProjectEntry(index)}>
@@ -1730,31 +1777,46 @@ export function ResumeEditorPage() {
                     <div className="space-y-2">
                       <Label>Start Date</Label>
                       <Input
+                        type="date"
                         value={entry.startDate || ''}
                         onChange={(e) => updateProjectEntry(index, 'startDate', e.target.value)}
-                        placeholder="YYYY-MM or YYYY"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
-                      <Input
-                        value={entry.endDate || ''}
-                        onChange={(e) => updateProjectEntry(index, 'endDate', e.target.value)}
-                        placeholder="YYYY-MM, YYYY, or Present"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={entry.endDate === 'Present' ? '' : (entry.endDate || '')}
+                          onChange={(e) => updateProjectEntry(index, 'endDate', e.target.value)}
+                          disabled={entry.endDate === 'Present'}
+                          className={entry.endDate === 'Present' ? 'opacity-50' : ''}
+                        />
+                        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={entry.endDate === 'Present'}
+                            onChange={(e) => updateProjectEntry(index, 'endDate', e.target.checked ? 'Present' : '')}
+                            className="rounded border-slate-300 dark:border-slate-600"
+                          />
+                          Present
+                        </label>
+                      </div>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <div className="flex items-center justify-between">
                         <Label>Description</Label>
-                        <Button
+                        <ProButton
                           variant="ghost"
                           size="sm"
                           onClick={() => handleAIEdit('project_description', `Project Description - ${entry.name}`, entry.description || '', undefined, undefined, undefined, undefined, index)}
                           className="h-8 px-2"
+                          featureName="AI Edit"
+                          featureDescription="Use AI to improve your project description. Highlight the impact and technologies used."
                         >
                           <Sparkles className="h-4 w-4 mr-1" />
                           AI Edit
-                        </Button>
+                        </ProButton>
                       </div>
                       <Textarea
                         value={entry.description || ''}
@@ -1778,15 +1840,16 @@ export function ResumeEditorPage() {
                           onChange={(e) => updateProjectHighlight(index, hIndex, e.target.value)}
                           placeholder="Bullet point"
                         />
-                        <Button
+                        <ProButton
                           variant="ghost"
                           size="sm"
                           onClick={() => handleAIEdit('project_highlight', `Project Highlight - ${entry.name}`, highlight, undefined, hIndex, undefined, undefined, index)}
                           className="h-8 px-2"
-                          title="AI Edit"
+                          featureName="AI Edit"
+                          featureDescription="Use AI to enhance this bullet point. Make your contributions stand out."
                         >
                           <Sparkles className="h-4 w-4" />
-                        </Button>
+                        </ProButton>
                         <Button variant="ghost" size="sm" onClick={() => removeProjectHighlight(index, hIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -1802,9 +1865,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Certifications Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('certifications')}
           >
             <div className="flex items-center gap-2">
@@ -1813,7 +1876,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('certifications') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addCertificationEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Certification
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Certification</span>
             </Button>
           </div>
           {expandedSections.has('certifications') && (
@@ -1845,9 +1908,9 @@ export function ResumeEditorPage() {
                       <div className="space-y-2">
                         <Label>Date</Label>
                         <Input
+                          type="date"
                           value={entry.date || ''}
                           onChange={(e) => updateCertificationEntry(index, 'date', e.target.value)}
-                          placeholder="YYYY-MM or YYYY"
                         />
                       </div>
                     </div>
@@ -1864,9 +1927,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Awards Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('awards')}
           >
             <div className="flex items-center gap-2">
@@ -1875,7 +1938,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('awards') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addAwardEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Award
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Award</span>
             </Button>
           </div>
           {expandedSections.has('awards') && (
@@ -1907,9 +1970,9 @@ export function ResumeEditorPage() {
                       <div className="space-y-2">
                         <Label>Date</Label>
                         <Input
+                          type="date"
                           value={entry.date || ''}
                           onChange={(e) => updateAwardEntry(index, 'date', e.target.value)}
-                          placeholder="YYYY-MM or YYYY"
                         />
                       </div>
                       <div className="space-y-2 md:col-span-2">
@@ -1935,9 +1998,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Volunteer Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('volunteer')}
           >
             <div className="flex items-center gap-2">
@@ -1946,7 +2009,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('volunteer') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addVolunteerEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Volunteer
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Volunteer</span>
             </Button>
           </div>
           {expandedSections.has('volunteer') && (
@@ -1956,7 +2019,7 @@ export function ResumeEditorPage() {
           ) : (
             <div className="space-y-6">
               {volunteer.map((entry, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div key={index} className="border rounded-lg p-3 sm:p-4 space-y-4">
                   <div className="flex items-start justify-between">
                     <h3 className="font-medium text-slate-900 dark:text-slate-100">Volunteer #{index + 1}</h3>
                     <Button variant="ghost" size="sm" onClick={() => removeVolunteerEntry(index)}>
@@ -1983,18 +2046,31 @@ export function ResumeEditorPage() {
                     <div className="space-y-2">
                       <Label>Start Date</Label>
                       <Input
+                        type="date"
                         value={entry.startDate || ''}
                         onChange={(e) => updateVolunteerEntry(index, 'startDate', e.target.value)}
-                        placeholder="YYYY-MM or YYYY"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>End Date</Label>
-                      <Input
-                        value={entry.endDate || ''}
-                        onChange={(e) => updateVolunteerEntry(index, 'endDate', e.target.value)}
-                        placeholder="YYYY-MM, YYYY, or Present"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={entry.endDate === 'Present' ? '' : (entry.endDate || '')}
+                          onChange={(e) => updateVolunteerEntry(index, 'endDate', e.target.value)}
+                          disabled={entry.endDate === 'Present'}
+                          className={entry.endDate === 'Present' ? 'opacity-50' : ''}
+                        />
+                        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={entry.endDate === 'Present'}
+                            onChange={(e) => updateVolunteerEntry(index, 'endDate', e.target.checked ? 'Present' : '')}
+                            className="rounded border-slate-300 dark:border-slate-600"
+                          />
+                          Present
+                        </label>
+                      </div>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Summary</Label>
@@ -2035,9 +2111,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Publications Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('publications')}
           >
             <div className="flex items-center gap-2">
@@ -2046,7 +2122,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('publications') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addPublicationEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Publication
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Publication</span>
             </Button>
           </div>
           {expandedSections.has('publications') && (
@@ -2078,9 +2154,9 @@ export function ResumeEditorPage() {
                       <div className="space-y-2">
                         <Label>Release Date</Label>
                         <Input
+                          type="date"
                           value={entry.releaseDate || ''}
                           onChange={(e) => updatePublicationEntry(index, 'releaseDate', e.target.value)}
-                          placeholder="YYYY-MM or YYYY"
                         />
                       </div>
                       <div className="space-y-2">
@@ -2114,9 +2190,9 @@ export function ResumeEditorPage() {
         </section>
 
         {/* Languages Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+        <section className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 sm:p-6">
           <div
-            className="flex items-center justify-between mb-4 cursor-pointer select-none"
+            className="flex flex-wrap items-center justify-between gap-2 mb-4 cursor-pointer select-none"
             onClick={() => toggleSection('languages')}
           >
             <div className="flex items-center gap-2">
@@ -2125,7 +2201,7 @@ export function ResumeEditorPage() {
               <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${expandedSections.has('languages') ? '' : '-rotate-90'}`} />
             </div>
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addLanguageEntry(); }}>
-              <Plus className="mr-2 h-4 w-4" /> Add Language
+              <Plus className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Add Language</span>
             </Button>
           </div>
           {expandedSections.has('languages') && (
@@ -2190,23 +2266,25 @@ export function ResumeEditorPage() {
         </div>
         </div>
 
-        {/* Match History Sidebar */}
-        <div className="w-80 shrink-0">
-          <div className="sticky top-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4">
+        {/* Desktop: Static sidebar - always visible on lg+ */}
+        <div className="hidden lg:block w-80 shrink-0">
+          <div className="sticky top-6 bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Match History</h3>
               </div>
-              <Button
+              <ProButton
                 variant="outline"
                 size="sm"
                 onClick={() => setNewMatchDialogOpen(true)}
                 disabled={isRetailoring}
+                featureName="Job Match Analysis"
+                featureDescription="Analyze how well your resume matches a job description. Get insights on what to improve."
               >
                 <Plus className="h-4 w-4 mr-1" />
                 New
-              </Button>
+              </ProButton>
             </div>
 
             {historyItem?.match_results ? (
@@ -2224,13 +2302,15 @@ export function ResumeEditorPage() {
                   </div>
                 </div>
 
-                {/* Action Buttons - at top for easy access */}
+                {/* Action Buttons */}
                 <div className="space-y-2">
-                  <Button
+                  <ProButton
                     size="sm"
                     className="w-full"
                     disabled={isRetailoring || (!historyItem?.job_json && !currentJobData)}
-                    onClick={() => handleRetailor()}
+                    onClick={handleRetailor}
+                    featureName="Resume Tailoring"
+                    featureDescription="Automatically tailor your resume to match the job description. AI-powered optimization for better results."
                   >
                     {isRetailoring ? (
                       <>
@@ -2243,37 +2323,45 @@ export function ResumeEditorPage() {
                         Retailor Resume
                       </>
                     )}
-                  </Button>
-                  <Button
+                  </ProButton>
+                  <ProButton
                     variant="outline"
                     size="sm"
                     className="w-full"
                     disabled={!historyItem?.match_results?.recommendations?.length || isRetailoring}
                     onClick={() => setRecommendationsDialogOpen(true)}
+                    featureName="Apply Recommendations"
+                    featureDescription="Let AI apply the recommended changes to your resume. Quickly implement improvements."
                   >
                     <TrendingUp className="h-4 w-4 mr-2" />
                     Apply Recommendations
-                  </Button>
+                  </ProButton>
                   {historyItem?.job_json && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled={isRematching || isRetailoring}
-                      onClick={handleQuickRematch}
-                    >
-                      {isRematching ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Rematching...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Rematch
-                        </>
-                      )}
-                    </Button>
+                    <div data-tour="quick-rematch-button">
+                      <Tooltip content="Re-analyze with same job description">
+                        <ProButton
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={isRematching || isRetailoring}
+                          onClick={handleQuickRematch}
+                          featureName="Rematch Analysis"
+                          featureDescription="Re-analyze your resume against the same job. See how your changes improved your match score."
+                        >
+                          {isRematching ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Rematching...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Rematch
+                            </>
+                          )}
+                        </ProButton>
+                      </Tooltip>
+                    </div>
                   )}
                 </div>
 
@@ -2374,15 +2462,241 @@ export function ResumeEditorPage() {
                 <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
                   Run a match analysis to see strengths, gaps, and recommendations.
                 </p>
-                <Button
+                <ProButton
                   variant="outline"
                   size="sm"
                   onClick={() => setNewMatchDialogOpen(true)}
                   disabled={isRetailoring}
+                  featureName="Job Match Analysis"
+                  featureDescription="Analyze how well your resume matches a job description. Get insights on what to improve."
                 >
                   <Target className="h-4 w-4 mr-2" />
                   Start New Match
-                </Button>
+                </ProButton>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile: Slide-out drawer - only on <lg */}
+        <div className={cn(
+          "lg:hidden fixed top-0 right-0 h-full w-80 bg-white dark:bg-slate-800 shadow-xl z-50 transform transition-transform duration-300 ease-in-out",
+          matchPanelOpen ? "translate-x-0" : "translate-x-full"
+        )}>
+          <div className="h-full overflow-y-auto p-4">
+            {/* Close button */}
+            <button
+              onClick={() => setMatchPanelOpen(false)}
+              className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Close match panel"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center justify-between mb-4 pr-8">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Match History</h3>
+              </div>
+              <ProButton
+                variant="outline"
+                size="sm"
+                onClick={() => setNewMatchDialogOpen(true)}
+                disabled={isRetailoring}
+                featureName="Job Match Analysis"
+                featureDescription="Analyze how well your resume matches a job description. Get insights on what to improve."
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                New
+              </ProButton>
+            </div>
+
+            {historyItem?.match_results ? (
+              <div className="space-y-4">
+                {/* Match Score */}
+                <div className={`rounded-lg p-4 ${getMatchBgColor(historyItem.match_results.match_percentage)}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score</span>
+                    <span className={`text-2xl font-bold ${getMatchColor(historyItem.match_results.match_percentage)}`}>
+                      {historyItem.match_results.match_percentage}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2">
+                  <ProButton
+                    size="sm"
+                    className="w-full"
+                    disabled={isRetailoring || (!historyItem?.job_json && !currentJobData)}
+                    onClick={handleRetailor}
+                    featureName="Resume Tailoring"
+                    featureDescription="Automatically tailor your resume to match the job description. AI-powered optimization for better results."
+                  >
+                    {isRetailoring ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Tailoring...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Retailor Resume
+                      </>
+                    )}
+                  </ProButton>
+                  <ProButton
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={!historyItem?.match_results?.recommendations?.length || isRetailoring}
+                    onClick={() => setRecommendationsDialogOpen(true)}
+                    featureName="Apply Recommendations"
+                    featureDescription="Let AI apply the recommended changes to your resume. Quickly implement improvements."
+                  >
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Apply Recommendations
+                  </ProButton>
+                  {historyItem?.job_json && (
+                    <div data-tour="quick-rematch-button">
+                      <Tooltip content="Re-analyze with same job description">
+                        <ProButton
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={isRematching || isRetailoring}
+                          onClick={handleQuickRematch}
+                          featureName="Rematch Analysis"
+                          featureDescription="Re-analyze your resume against the same job. See how your changes improved your match score."
+                        >
+                          {isRematching ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Rematching...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Rematch
+                            </>
+                          )}
+                        </ProButton>
+                      </Tooltip>
+                    </div>
+                  )}
+                </div>
+
+                {/* Strengths - Collapsible */}
+                {historyItem.match_results.strengths.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('strengths')}
+                      className="flex items-center gap-2 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.strengths ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Strengths</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.strengths.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.strengths && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.strengths.map((strength, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {strength}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Gaps - Collapsible */}
+                {historyItem.match_results.gaps.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('gaps')}
+                      className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.gaps ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Gaps</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.gaps.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.gaps && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.gaps.map((gap, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {gap}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Recommendations - Collapsible */}
+                {historyItem.match_results.recommendations.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => toggleMatchSection('recommendations')}
+                      className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors w-full text-left"
+                    >
+                      {matchSectionsExpanded.recommendations ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <Lightbulb className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Recommendations</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        ({historyItem.match_results.recommendations.length})
+                      </span>
+                    </button>
+                    {matchSectionsExpanded.recommendations && (
+                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.recommendations.map((rec, idx) => (
+                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Target className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">No match analysis yet</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                  Run a match analysis to see strengths, gaps, and recommendations.
+                </p>
+                <ProButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewMatchDialogOpen(true)}
+                  disabled={isRetailoring}
+                  featureName="Job Match Analysis"
+                  featureDescription="Analyze how well your resume matches a job description. Get insights on what to improve."
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Start New Match
+                </ProButton>
               </div>
             )}
           </div>
@@ -2433,7 +2747,7 @@ export function ResumeEditorPage() {
             skills: skills,
             experience: work
           }}
-          onApplySummary={(newSummary) => setBasics({ ...basics, summary: newSummary })}
+          onApplySummary={(newSummary) => setBasics(prev => ({ ...prev, summary: newSummary }))}
           onApplySkills={(newSkills) => setSkills(newSkills)}
           onApplyExperience={(newWork) => setWork(newWork)}
           onRetailor={() => handleRetailor()}
@@ -2449,6 +2763,9 @@ export function ResumeEditorPage() {
         onMatchComplete={handleMatchComplete}
         onRetailor={handleRetailor}
       />
+
+      {/* Guided Tour */}
+      <GuidedTour tourId="editor" />
     </div>
   )
 }

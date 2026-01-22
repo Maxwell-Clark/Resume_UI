@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase'
 type User = {
   id: string
   email?: string
-  user_metadata?: Record<string, any>
-  app_metadata?: Record<string, any>
+  user_metadata?: Record<string, unknown>
+  app_metadata?: Record<string, unknown>
 }
 
 type Session = {
@@ -24,6 +24,12 @@ type AuthError = {
   name?: string
 } | null
 
+interface UpdateUserAttributes {
+  email?: string
+  password?: string
+  data?: Record<string, unknown>
+}
+
 interface AuthContextType {
   user: User | null
   session: Session | null
@@ -35,6 +41,7 @@ interface AuthContextType {
   signInWithLinkedIn: () => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
   getAccessToken: () => string | null
+  updateUser: (attributes: UpdateUserAttributes) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -123,6 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return session?.access_token ?? null
   }
 
+  const updateUser = async (attributes: UpdateUserAttributes) => {
+    const { error } = await supabase.auth.updateUser(attributes)
+    if (error) throw error
+  }
+
   const value = {
     user,
     session,
@@ -134,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithLinkedIn,
     signOut,
     getAccessToken,
+    updateUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

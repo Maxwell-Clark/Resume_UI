@@ -78,7 +78,7 @@ export function NewMatchDialog({
 
         await updateHistoryItem(historyItemId, {
           match_results: matchResults,
-          job_json: job as any,  // Save parsed job for retailoring
+          job_json: job,
         })
       }
     } catch (err) {

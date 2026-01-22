@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { LogOut, Menu, FileText } from 'lucide-react'
 import { SidebarNavigation } from './SidebarNavigation'
+import { SubscriptionBadge } from './SubscriptionBadge'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -37,14 +38,20 @@ export function Layout({ children }: LayoutProps) {
         <div className="flex-1 p-4 overflow-y-auto">
           <SidebarNavigation />
         </div>
-            {user && (
+        {user && <SubscriptionBadge />}
+        {user && (
           <div className="p-4 border-t bg-background/50">
             <p className="text-xs text-muted-foreground truncate font-medium">
               Signed in as
             </p>
-            <p className="text-sm truncate" title={user.email}>
-                  {user.email}
+            <p className="text-sm font-medium truncate" title={(user.user_metadata?.full_name as string) || user.email}>
+              {(user.user_metadata?.full_name as string) || user.email?.split('@')[0] || 'User'}
             </p>
+            {typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name && (
+              <p className="text-xs text-muted-foreground truncate" title={user.email}>
+                {user.email}
+              </p>
+            )}
           </div>
         )}
       </aside>
@@ -63,9 +70,16 @@ export function Layout({ children }: LayoutProps) {
               <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               <span className="text-xl font-bold">AAA Resume</span>
             </div>
-            <SidebarNavigation onLinkClick={close} />
+            <div className="flex-1">
+              <SidebarNavigation onLinkClick={close} />
+            </div>
+            {user && (
+              <div className="mt-auto">
+                <SubscriptionBadge />
               </div>
             )}
+          </div>
+        )}
       </Sidebar>
 
       {/* Main Content Area */}

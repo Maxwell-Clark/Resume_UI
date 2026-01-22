@@ -4,56 +4,29 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Tooltip } from '@/components/ui/tooltip'
+import { GuidedTour } from '@/components/GuidedTour'
 import {
   FileText, Link, Type, Loader2, CheckCircle, AlertCircle,
-  RotateCcw, FileEdit, Wand2, Target, Plus, TrendingUp, ThumbsUp,
-  AlertTriangle, RefreshCw
+  Wand2, Target, Plus, TrendingUp, ThumbsUp,
+  AlertTriangle, RefreshCw, HelpCircle
 } from 'lucide-react'
 import { saveHistoryItem, updateHistoryItem, getHistoryItemByResumeId, getHistoryItemById } from '@/lib/history'
 import { useJobStatusPolling } from '@/hooks/useJobStatusPolling'
 import { authenticatedFetch, handleApiResponse } from '@/lib/auth'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useSubscription } from '@/contexts/SubscriptionContext'
 import { ResumeSelectionDialog, type ResumeSelectionResult } from '@/components/ResumeSelectionDialog'
 import { TailorCompleteDialog } from '@/components/TailorCompleteDialog'
-import { type Resume, resumeService } from '@/services/resume'
+import {
+  type Resume,
+  type ParsedResume,
+  type JobData,
+  type MatchResponse,
+  type TailorResponse,
+  resumeService
+} from '@/services/resume'
 import { cn } from '@/lib/utils'
-
-// Shared interfaces
-interface ParsedResume {
-  person: any
-  experience: any[]
-  education: any[]
-  skills: any[]
-  [key: string]: any
-}
-
-interface JobData {
-  title: string
-  company: string
-  description: string
-  requirements: string[]
-  [key: string]: any
-}
-
-interface StorageInfo {
-  url?: string
-  signed_url?: string
-  path: string
-  bucket: string
-}
-
-interface TailorResponse {
-  storage: StorageInfo
-  format: string
-  note?: string
-}
-
-interface MatchResponse {
-  match_percentage: number
-  strengths: string[]
-  gaps: string[]
-  recommendations: string[]
-}
 
 type TabType = 'studio' | 'create'
 
@@ -141,6 +114,7 @@ function StudioTab() {
 
   const navigate = useNavigate()
   const { addNotification } = useNotifications()
+  const { refreshBillingStatus } = useSubscription()
 
   useJobStatusPolling(currentHistoryId, (completedItem) => {
     // Update the download URL when tailoring completes
@@ -153,10 +127,6 @@ function StudioTab() {
       type: 'success'
     })
   })
-
-  const handleResetPrompt = () => {
-    setPrompt(DEFAULT_PROMPT)
-  }
 
   const handleResumeSelection = (result: ResumeSelectionResult) => {
     if (result.type === 'existing') {
@@ -185,7 +155,7 @@ function StudioTab() {
 
   const parseJobDescription = async (description: string, isLink: boolean): Promise<JobData> => {
     const formData = new FormData()
-    
+
     if (isLink) {
       formData.append('url', description)
     } else {
@@ -197,7 +167,7 @@ function StudioTab() {
       body: formData,
     })
 
-    const result = await handleApiResponse<JobData>(response)
+    const result = await handleApiResponse<JobData & { job_json?: JobData }>(response)
     return result.job_json || result
   }
 
@@ -307,6 +277,9 @@ PRIORITY FOCUS:
       const result = await matchResume(resume, job)
       setMatchResult(result)
       setShowMatchResults(true)
+
+      // Refresh billing status to update quota display in sidebar
+      refreshBillingStatus()
 
       // If match results available, use them to enhance the prompt
       setPrompt(generateRetailorPrompt(result))
@@ -425,6 +398,9 @@ PRIORITY FOCUS:
       setTailorDownloadUrl(downloadUrl)
       setCurrentHistoryId(null)
 
+      // Refresh billing status to update quota display in sidebar
+      refreshBillingStatus()
+
       addNotification({
         title: 'Resume Tailored Successfully',
         message: `Your resume for ${job.title} at ${job.company} is ready.`,
@@ -486,10 +462,13 @@ PRIORITY FOCUS:
         </div>
 
       {/* Resume Upload Section */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6" data-tour="resume-selection">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Resume Selection</h2>
+          <Tooltip content="Choose from your library or upload a new PDF">
+            <HelpCircle className="h-4 w-4 text-slate-400" />
+          </Tooltip>
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
           Select an existing resume or upload a new one in PDF format.
@@ -542,9 +521,12 @@ PRIORITY FOCUS:
           Provide the job description either as a URL link or by pasting the text directly.
         </p>
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          <div className="flex items-center justify-between" data-tour="job-input-toggle">
+            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
               Input Type
+              <Tooltip content="Enter text or paste a URL to scrape">
+                <HelpCircle className="h-4 w-4 text-slate-400" />
+              </Tooltip>
             </Label>
             <div className="flex items-center gap-2">
               <button
@@ -614,24 +596,28 @@ PRIORITY FOCUS:
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Match Analysis</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">Optional: Check how well your resume matches the job before tailoring</p>
           </div>
-          <Button
-            onClick={handleCheckMatch}
-            disabled={isCheckingMatch || (!resumeFile && !selectedResume) || !jobDescription.trim()}
-            variant="outline"
-            className="shrink-0"
-          >
-            {isCheckingMatch ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Target className="mr-2 h-4 w-4" />
-                Check Match
-              </>
-            )}
-          </Button>
+          <div data-tour="check-match-button">
+            <Tooltip content="Analyze how well your resume matches this job">
+              <Button
+                onClick={handleCheckMatch}
+                disabled={isCheckingMatch || (!resumeFile && !selectedResume) || !jobDescription.trim()}
+                variant="outline"
+                className="shrink-0"
+              >
+                {isCheckingMatch ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Target className="mr-2 h-4 w-4" />
+                    Check Match
+                  </>
+                )}
+              </Button>
+            </Tooltip>
+          </div>
         </div>
         
         {/* Match Results */}
@@ -642,20 +628,26 @@ PRIORITY FOCUS:
                 <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Match Analysis</h3>
               </div>
-              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full" data-tour="match-score">
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score:</span>
                 <span className={`text-2xl font-bold ${getMatchColor(matchResult.match_percentage)}`}>
                   {matchResult.match_percentage}%
                 </span>
+                <Tooltip content="80%+ excellent, 60-79% good, <60% needs work">
+                  <HelpCircle className="h-4 w-4 text-slate-400" />
+                </Tooltip>
               </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               {/* Strengths */}
-              <div className="space-y-4">
+              <div className="space-y-4" data-tour="strengths-section">
                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                   <ThumbsUp className="h-5 w-5" />
                   <h4 className="font-semibold">Strengths</h4>
+                  <Tooltip content="Skills that align well with the job">
+                    <HelpCircle className="h-4 w-4 text-green-400" />
+                  </Tooltip>
                 </div>
                 <ul className="space-y-2">
                   {matchResult.strengths.map((strength, index) => (
@@ -668,10 +660,13 @@ PRIORITY FOCUS:
               </div>
 
               {/* Gaps */}
-              <div className="space-y-4">
+              <div className="space-y-4" data-tour="gaps-section">
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                   <AlertTriangle className="h-5 w-5" />
                   <h4 className="font-semibold">Missing Requirements</h4>
+                  <Tooltip content="Requirements you may be missing">
+                    <HelpCircle className="h-4 w-4 text-red-400" />
+                  </Tooltip>
                 </div>
                 <ul className="space-y-2">
                   {matchResult.gaps.map((gap, index) => (
@@ -709,51 +704,55 @@ PRIORITY FOCUS:
             <div className="pt-4 border-t dark:border-slate-700">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Standard Tailor Button */}
-                <div className="flex flex-col items-center gap-2">
-                  <Button
-                    onClick={() => handleTailor(false)}
-                    disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
-                    variant="outline"
-                    className="w-full px-6 py-6 text-lg font-semibold"
-                    size="lg"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="mr-2 h-5 w-5" />
-                        Tailor Resume
-                      </>
-                    )}
-                  </Button>
+                <div className="flex flex-col items-center gap-2" data-tour="tailor-button">
+                  <Tooltip content="Standard tailoring using your prompt">
+                    <Button
+                      onClick={() => handleTailor(false)}
+                      disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
+                      variant="outline"
+                      className="w-full px-6 py-6 text-lg font-semibold"
+                      size="lg"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="mr-2 h-5 w-5" />
+                          Tailor Resume
+                        </>
+                      )}
+                    </Button>
+                  </Tooltip>
                   <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
                     Standard tailoring using your custom prompt
                   </p>
                 </div>
 
                 {/* Tailor with Suggestions Button */}
-                <div className="flex flex-col items-center gap-2">
-                  <Button
-                    onClick={() => handleTailor(true)}
-                    disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
-                    className="w-full px-6 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
-                    size="lg"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-5 w-5" />
-                        Tailor with Suggestions
-                      </>
-                    )}
-                  </Button>
+                <div className="flex flex-col items-center gap-2" data-tour="tailor-with-suggestions-button">
+                  <Tooltip content="Enhanced tailoring addressing gaps">
+                    <Button
+                      onClick={() => handleTailor(true)}
+                      disabled={isProcessing || (!resumeFile && !selectedResume) || !jobDescription.trim()}
+                      className="w-full px-6 py-6 text-lg font-semibold shadow-md hover:shadow-lg transition-shadow"
+                      size="lg"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-5 w-5" />
+                          Tailor with Suggestions
+                        </>
+                      )}
+                    </Button>
+                  </Tooltip>
                   <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
                     Uses match analysis to optimize your resume
                   </p>
@@ -762,45 +761,6 @@ PRIORITY FOCUS:
             </div>
           </div>
         )}
-      </div>
-
-      {/* Customization Options Section */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">Tailor Prompt</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">Customize the analysis prompt and output filename</p>
-        </div>
-
-        <div className="space-y-6">
-          {/* Analysis Prompt */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileEdit className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                <Label htmlFor="analysis-prompt" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Analysis Prompt
-                </Label>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleResetPrompt}
-                className="text-xs"
-              >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Reset to Default
-              </Button>
-            </div>
-            <Textarea
-              id="analysis-prompt"
-              placeholder="Enter your custom analysis prompt..."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-32 text-slate-900 dark:text-slate-100"
-            />
-          </div>
-        </div>
       </div>
 
       {/* Submit Button - Only show when no match results (buttons move to match results section when available) */}
@@ -896,6 +856,9 @@ PRIORITY FOCUS:
           onGoToHistory={() => navigate('/history')}
         />
       )}
+
+      {/* Guided Tour */}
+      <GuidedTour tourId="studio" />
     </div>
   )
 }
@@ -1073,9 +1036,9 @@ export function ResumeStudioPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-4xl px-4 sm:px-6">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume Studio</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume Studio</h1>
         <p className="text-slate-600 dark:text-slate-400">
           Tailor, analyze, or create your perfect resume
         </p>
@@ -1084,7 +1047,7 @@ export function ResumeStudioPage() {
       {/* Tab Navigation */}
       <div className="mb-8">
         <div className="border-b border-slate-200 dark:border-slate-700">
-          <nav className="-mb-px flex space-x-8 justify-center" aria-label="Tabs">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 justify-center" aria-label="Tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = currentTab === tab.id
@@ -1100,7 +1063,7 @@ export function ResumeStudioPage() {
                   )}
                 >
                   <Icon className={cn(
-                    'h-10 w-10',
+                    'h-6 w-6 sm:h-10 sm:w-10',
                     isActive ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-500'
                   )} />
                   {tab.label}
