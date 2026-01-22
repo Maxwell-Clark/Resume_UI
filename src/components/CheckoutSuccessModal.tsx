@@ -132,7 +132,7 @@ export function CheckoutSuccessModal({
 
         {/* Title */}
         <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-          Welcome to {isPremium ? 'Premium' : 'Basic'}!
+          Welcome to {isPremium ? 'Pro' : 'Basic'}!
         </h2>
 
         {/* Subtitle */}
@@ -167,7 +167,7 @@ export function CheckoutSuccessModal({
           onClick={handleStartUsing}
         >
           <Sparkles className="h-5 w-5 mr-2" />
-          Start Using Pro Features
+          {isPremium ? 'Get Started with Pro' : 'Get Started'}
         </Button>
       </div>
 
