@@ -77,6 +77,11 @@ export function TourStep({
         top = targetRect.top + targetRect.height / 2 - popoverHeight / 2 + scrollY
         left = targetRect.right + offset + scrollX
         break
+      case 'center':
+        // Center the popover in the viewport while still highlighting the target
+        top = window.innerHeight / 2 - popoverHeight / 2 + scrollY
+        left = window.innerWidth / 2 - popoverWidth / 2 + scrollX
+        break
     }
 
     // Keep within viewport bounds
@@ -227,10 +232,10 @@ export function TourStep({
         )}
       </div>
 
-      {/* Arrow */}
-      {position.targetRect && (
+      {/* Arrow - don't show for center placement */}
+      {position.targetRect && placement !== 'center' && (
         <span
-          className={cn('absolute w-0 h-0', arrowClasses[placement])}
+          className={cn('absolute w-0 h-0', arrowClasses[placement as keyof typeof arrowClasses])}
           aria-hidden="true"
         />
       )}

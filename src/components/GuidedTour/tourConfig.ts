@@ -4,7 +4,7 @@ export interface TourStep {
   target: string // data-tour attribute selector
   title: string
   content: string
-  placement?: 'top' | 'bottom' | 'left' | 'right'
+  placement?: 'top' | 'bottom' | 'left' | 'right' | 'center'
 }
 
 export const tourSteps: Record<TourId, TourStep[]> = {
@@ -25,7 +25,7 @@ export const tourSteps: Record<TourId, TourStep[]> = {
       target: 'check-match-button',
       title: 'Analyze Match',
       content: 'Click here to see how well your resume matches the job requirements.',
-      placement: 'left',
+      placement: 'center',
     },
     {
       target: 'match-score',

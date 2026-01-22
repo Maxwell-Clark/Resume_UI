@@ -153,6 +153,8 @@ export const billingService = {
     priceId: string,
     promoCode?: string
   ): Promise<EmbeddedCheckoutResponse> {
+    const returnUrl = `${window.location.origin}/account?checkout=success`
+
     const response = await authenticatedFetch('/billing/embedded-checkout-session', {
       method: 'POST',
       headers: {
@@ -161,6 +163,7 @@ export const billingService = {
       body: JSON.stringify({
         price_id: priceId,
         promo_code: promoCode || null,
+        return_url: returnUrl,
       }),
     })
     return handleApiResponse<EmbeddedCheckoutResponse>(response)
