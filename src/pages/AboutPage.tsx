@@ -1,5 +1,5 @@
 import { PublicLayout } from '@/components/PublicLayout'
-import { Sparkles, Shield, Zap, Target, Users, Clock, Heart } from 'lucide-react'
+import { Sparkles, Shield, Zap, Target } from 'lucide-react'
 
 export function AboutPage() {
   return (
@@ -95,40 +95,22 @@ export function AboutPage() {
 
           <section className="mb-8 sm:mb-12">
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">
-              Our Approach
+              Our Belief
             </h2>
-            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
-              We've designed AAA Resume with you in mind. Here's what drives everything we build:
+            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
+              We believe that looking for a job shouldn't be a job. The hiring process has become
+              unnecessarily complex, time-consuming, and frustrating for everyone involved.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-              <div className="bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-700 text-center">
-                <Clock className="h-8 w-8 text-blue-600 dark:text-blue-400 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  Save Your Time
-                </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Tailoring a resume used to take hours. Now it takes seconds.
-                </p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-700 text-center">
-                <Users className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  Accessible to All
-                </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Professional resume optimization shouldn't require expensive consultants.
-                </p>
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-700 text-center">
-                <Heart className="h-8 w-8 text-red-600 dark:text-red-400 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  Your Success Matters
-                </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  We measure our success by how many interviews you land.
-                </p>
-              </div>
-            </div>
+            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
+              Our goal extends beyond just simplifying resumes. We're working to streamline the
+              entire job application and hiring process. Every feature we build is designed to
+              remove friction, save time, and help candidates and employers connect more effectively.
+            </p>
+            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
+              When job seekers can focus on finding the right opportunity instead of formatting
+              documents, and when companies can find qualified candidates without wading through
+              mismatched applications, everyone wins.
+            </p>
           </section>
 
           <section>

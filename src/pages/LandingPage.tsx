@@ -15,8 +15,7 @@ import {
   Download,
   Edit,
   ThumbsUp,
-  AlertTriangle,
-  Clock
+  AlertTriangle
 } from 'lucide-react'
 
 export function LandingPage() {
@@ -58,8 +57,8 @@ export function LandingPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
               <h1 className="text-5xl sm:text-6xl font-bold text-slate-900 dark:text-slate-100 mb-6">
-                Land More Interviews with
-                <span className="text-blue-600 dark:text-blue-400"> Perfectly Matched Resumes</span>
+                Looking for a job
+                <span className="text-blue-600 dark:text-blue-400"> shouldn't be a job</span>
               </h1>
               <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-8">
                 See exactly how your resume matches each job. Get personalized recommendations, then tailor in one click.
@@ -108,10 +107,10 @@ export function LandingPage() {
             <div className="grid md:grid-cols-3 gap-8 text-center">
               <div>
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  <span className="text-4xl font-bold text-slate-900 dark:text-slate-100">30s</span>
+                  <CheckCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  <span className="text-4xl font-bold text-slate-900 dark:text-slate-100">Free</span>
                 </div>
-                <p className="text-slate-600 dark:text-slate-400">Average processing time</p>
+                <p className="text-slate-600 dark:text-slate-400">Free to start</p>
               </div>
               <div>
                 <div className="flex items-center justify-center gap-2 mb-2">
