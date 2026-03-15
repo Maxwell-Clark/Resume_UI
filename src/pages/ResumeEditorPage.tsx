@@ -356,10 +356,11 @@ export function ResumeEditorPage() {
       })
 
       // Show warning for keywords lost
-      if (result.keywords_lost.length > 0) {
+      const keywordsLost = (result as GuaranteedTailorResponse & { keywords_lost?: string[] }).keywords_lost
+      if (keywordsLost && keywordsLost.length > 0) {
         addNotification({
           title: 'Keywords Lost',
-          message: `${result.keywords_lost.length} keyword(s) were lost during tailoring: ${result.keywords_lost.slice(0, 3).join(', ')}${result.keywords_lost.length > 3 ? '...' : ''}`,
+          message: `${keywordsLost.length} keyword(s) were lost during tailoring: ${keywordsLost.slice(0, 3).join(', ')}${keywordsLost.length > 3 ? '...' : ''}`,
           type: 'warning'
         })
       }
