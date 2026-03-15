@@ -45,6 +45,57 @@ export interface MatchResponse {
   recommendations: string[]
 }
 
+// Enhanced Match Response Types
+export interface MatchScoreBreakdown {
+  overall: number
+  skills_match: number
+  experience_match: number
+  education_match: number
+  ats_compatibility: number
+  ai_role_fit: number
+}
+
+export interface ExperienceAnalysisResponse {
+  years_required: number | null
+  years_found: number
+  relevance_score: number
+  seniority_match: 'under' | 'match' | 'over'
+  relevant_roles: string[]
+}
+
+export interface EducationAnalysisResponse {
+  degree_match: boolean
+  field_match: boolean
+  degree_required?: string
+  degree_found?: string
+  field_required?: string
+  field_found?: string
+}
+
+export interface StrengthItem {
+  description: string
+  confidence: number  // 0-100
+  evidence: string[]
+  category: string  // e.g., 'skills', 'experience', 'education'
+}
+
+export interface GapItem {
+  description: string
+  severity: 'critical' | 'important' | 'nice_to_have'
+  category: string
+  recommendation: string
+}
+
+export interface EnhancedMatchResponse {
+  match_percentage: number
+  score_breakdown: MatchScoreBreakdown
+  experience_analysis?: ExperienceAnalysisResponse
+  education_analysis?: EducationAnalysisResponse
+  strengths: StrengthItem[]
+  gaps: GapItem[]
+  recommendations: string[]
+}
+
 export interface StorageInfo {
   url?: string
   signed_url?: string
@@ -57,6 +108,28 @@ export interface TailorResponse {
   storage: StorageInfo
   format: string
   note?: string
+}
+
+export interface GuaranteedTailorResponse {
+  storage: StorageInfo | null
+  format: string
+  baseline_score: number
+  final_score: number
+  score_improvement: number
+  attempts: number
+  verification_passed: boolean
+  warnings: string[]
+}
+
+export interface TailorOptions {
+  customPrompt?: string
+  historyId?: string | null
+  /** Enable verification loop to guarantee score improvement */
+  guaranteed?: boolean
+  /** Pre-computed match result to avoid re-computing baseline (saves 3-5s) */
+  baselineMatch?: EnhancedMatchResponse
+  /** Max retry attempts when guaranteed=true (0-5, default 2) */
+  maxRetries?: number
 }
 
 export const DEFAULT_TAILOR_PROMPT = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
@@ -106,26 +179,77 @@ SELF-CHECK BEFORE OUTPUT (internal only):
 
 /**
  * Generate a retailor prompt enhanced with match analysis results
+ * Provides explicit, structured instructions to maximize match score
  */
-export function generateRetailorPrompt(matchResult: MatchResponse): string {
-  const gapsText = matchResult.gaps.length > 0
-    ? `\n- The following gaps were identified:\n${matchResult.gaps.map(gap => `  • ${gap}`).join('\n')}`
-    : '\n- No significant gaps were identified.'
+export function generateRetailorPrompt(matchResult: EnhancedMatchResponse): string {
+  // Format recommendations as explicit actions
+  const recommendationActions = matchResult.recommendations.length > 0
+    ? matchResult.recommendations.map((rec, idx) =>
+        `  ACTION ${idx + 1}: ${rec}\n    → Apply this by: modifying relevant experience bullets and/or adding to skills section`
+      ).join('\n')
+    : '  No specific actions required.'
 
-  const recommendationsText = matchResult.recommendations.length > 0
-    ? `\n- Recommended improvements:\n${matchResult.recommendations.map((rec, idx) => `  ${idx + 1}. ${rec}`).join('\n')}`
-    : '\n- No specific recommendations provided.'
+  // Sort gaps by severity: critical first, then important, then nice_to_have
+  const sortedGaps = [...matchResult.gaps].sort((a, b) => {
+    const severityOrder = { critical: 0, important: 1, nice_to_have: 2 }
+    return severityOrder[a.severity] - severityOrder[b.severity]
+  })
+
+  // Format gaps with severity and specific recommendations
+  const criticalGaps = sortedGaps.filter(g => g.severity === 'critical')
+  const importantGaps = sortedGaps.filter(g => g.severity === 'important')
+  const niceToHaveGaps = sortedGaps.filter(g => g.severity === 'nice_to_have')
+
+  const formatGapItem = (gap: GapItem, idx: number, prefix: string) => {
+    const rec = gap.recommendation ? `\n    → Specific fix: ${gap.recommendation}` : ''
+    return `  ${prefix} ${idx + 1} [${gap.category}]: ${gap.description}${rec}\n    → Address by: finding related experience in resume and emphasizing it, or adding relevant skill keywords`
+  }
+
+  let gapInstructions = ''
+  if (criticalGaps.length > 0) {
+    gapInstructions += `\n🚨 CRITICAL GAPS (must address - these significantly impact match score):\n`
+    gapInstructions += criticalGaps.map((g, i) => formatGapItem(g, i, 'CRITICAL')).join('\n')
+  }
+  if (importantGaps.length > 0) {
+    gapInstructions += `\n\n⚠️ IMPORTANT GAPS (should address for better match):\n`
+    gapInstructions += importantGaps.map((g, i) => formatGapItem(g, i, 'IMPORTANT')).join('\n')
+  }
+  if (niceToHaveGaps.length > 0) {
+    gapInstructions += `\n\n💡 NICE TO HAVE (address if possible with existing experience):\n`
+    gapInstructions += niceToHaveGaps.map((g, i) => formatGapItem(g, i, 'OPTIONAL')).join('\n')
+  }
+
+  if (!gapInstructions) {
+    gapInstructions = '  No gaps to address.'
+  }
 
   return `${DEFAULT_TAILOR_PROMPT}
 
-MATCH ANALYSIS RESULTS:
-The resume was analyzed against the job description and achieved a ${matchResult.match_percentage}% match score.${gapsText}${recommendationsText}
+═══════════════════════════════════════════════════════════════
+OPTIMIZATION OBJECTIVE - MAXIMIZE MATCH SCORE
+═══════════════════════════════════════════════════════════════
+Current match score: ${matchResult.match_percentage}%
+Target: Achieve the highest possible match by applying ALL recommendations below.
+${criticalGaps.length > 0 ? `\n⚠️ ${criticalGaps.length} CRITICAL gap(s) detected - prioritize addressing these first!` : ''}
 
-PRIORITY FOCUS:
-- Address the identified gaps by incorporating relevant skills, experiences, or achievements that align with the job requirements.
-- Prioritize improvements that will increase the match score while maintaining truth and accuracy.
-- Emphasize the recommended improvements in the resume tailoring process.
-- Focus on bridging the gap between current resume content and job requirements through strategic rewording and emphasis.`
+REQUIRED ACTIONS (apply each one):
+${recommendationActions}
+
+GAPS TO ADDRESS (bridge each one using existing resume content):
+${gapInstructions}
+
+EXECUTION PRIORITY:
+1. CRITICAL GAPS: Address all critical gaps first using existing truthful content.
+2. SKILLS SECTION: Add/reorder skills to match job requirements.
+3. EXPERIENCE BULLETS: Rewrite to incorporate recommendation themes. Use JD language where truthful.
+4. SUMMARY: Align with job focus areas.
+
+VERIFICATION CHECKLIST (ensure before output):
+□ Every CRITICAL gap has been addressed with existing truthful content
+□ Every recommendation action has been applied somewhere in the resume
+□ Important gaps have been addressed where possible
+□ Skills section prioritizes JD-relevant terms
+□ Experience bullets use language that addresses identified gaps`
 }
 
 export const resumeService = {
@@ -246,15 +370,15 @@ export const resumeService = {
   },
 
   /**
-   * Match a resume against a job description
+   * Match a resume against a job description (enhanced analysis)
    */
-  async matchResume(resume: ParsedResume, job: JobData): Promise<MatchResponse> {
+  async matchResume(resume: ParsedResume, job: JobData): Promise<EnhancedMatchResponse> {
     const payload = {
       resume_jsonresume: resume,
       job_json: job
     }
 
-    const response = await authenticatedFetch('/match', {
+    const response = await authenticatedFetch('/match/enhanced', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -262,23 +386,36 @@ export const resumeService = {
       body: JSON.stringify(payload),
     })
 
-    return handleApiResponse<MatchResponse>(response)
+    return handleApiResponse<EnhancedMatchResponse>(response)
   },
 
   /**
    * Tailor a resume for a job
+   *
+   * @param resume - Resume data in ParsedResume format
+   * @param job - Job description data
+   * @param fileName - Filename for the output
+   * @param options - Optional TailorOptions for customization
+   * @returns TailorResponse or GuaranteedTailorResponse when guaranteed=true
    */
   async tailorResume(
     resume: ParsedResume,
     job: JobData,
     fileName: string,
-    historyId?: string | null,
-    customPrompt?: string
-  ): Promise<TailorResponse> {
-    const payload = {
+    options?: TailorOptions
+  ): Promise<TailorResponse | GuaranteedTailorResponse> {
+    const payload: Record<string, unknown> = {
       resume_jsonresume: resume,
       job_json: job,
-      ...(customPrompt && { custom_prompt: customPrompt })
+    }
+
+    if (options?.customPrompt) {
+      payload.custom_prompt = options.customPrompt
+    }
+
+    // Include baseline match for guaranteed mode (saves 3-5s)
+    if (options?.guaranteed && options?.baselineMatch) {
+      payload.baseline_match = options.baselineMatch
     }
 
     const params = new URLSearchParams({
@@ -288,8 +425,15 @@ export const resumeService = {
       filename: fileName
     })
 
-    if (historyId) {
-      params.append('history_id', historyId)
+    if (options?.historyId) {
+      params.append('history_id', options.historyId)
+    }
+
+    if (options?.guaranteed) {
+      params.append('guaranteed', 'true')
+      if (options.maxRetries !== undefined) {
+        params.append('max_retries', options.maxRetries.toString())
+      }
     }
 
     const response = await authenticatedFetch(`/tailor?${params.toString()}`, {
@@ -300,7 +444,27 @@ export const resumeService = {
       body: JSON.stringify(payload),
     })
 
+    if (options?.guaranteed) {
+      return handleApiResponse<GuaranteedTailorResponse>(response)
+    }
     return handleApiResponse<TailorResponse>(response)
+  },
+
+  /**
+   * Legacy tailorResume signature for backward compatibility
+   * @deprecated Use tailorResume with TailorOptions instead
+   */
+  async tailorResumeLegacy(
+    resume: ParsedResume,
+    job: JobData,
+    fileName: string,
+    historyId?: string | null,
+    customPrompt?: string
+  ): Promise<TailorResponse> {
+    return this.tailorResume(resume, job, fileName, {
+      historyId,
+      customPrompt,
+    }) as Promise<TailorResponse>
   },
 }
 

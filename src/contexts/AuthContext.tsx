@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import posthog from 'posthog-js'
 import { supabase } from '@/lib/supabase'
 
 // Define types based on Supabase auth responses
@@ -60,6 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session as Session | null)
       setUser((session?.user as User) ?? null)
       setLoading(false)
+
+      // Identify user in PostHog for analytics
+      if (session?.user) {
+        posthog.identify(session.user.id, {
+          email: session.user.email,
+        })
+      }
     })
 
     // Listen for auth changes
@@ -69,6 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session as Session | null)
       setUser((session?.user as User) ?? null)
       setLoading(false)
+
+      // Identify user in PostHog for analytics
+      if (session?.user) {
+        posthog.identify(session.user.id, {
+          email: session.user.email,
+        })
+      } else {
+        posthog.reset()
+      }
     })
 
     return () => subscription.unsubscribe()

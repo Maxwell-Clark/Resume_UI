@@ -3,14 +3,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/ui/dialog'
-import { Download, FileEdit, History, ArrowRight, Loader2, Wand2 } from 'lucide-react'
-import { updateHistoryItem } from '@/lib/history'
+import { Download, FileEdit, History, ArrowRight, Loader2, Wand2, ChevronDown, ChevronUp, Link } from 'lucide-react'
+import { updateHistoryItem, type WorkLocationType } from '@/lib/history'
+import { cn } from '@/lib/utils'
 
 export interface JobDetails {
   jobTitle: string
   company: string
   salaryRange?: string
   industry?: string
+  jobPostingUrl?: string
+  location?: string
+  workLocationType?: WorkLocationType
 }
 
 export interface TailorCompleteDialogProps {
@@ -36,12 +40,16 @@ export function TailorCompleteDialog({
 }: TailorCompleteDialogProps) {
   const [step, setStep] = useState<1 | 2>(1)
   const [isSaving, setIsSaving] = useState(false)
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false)
 
   // Editable job details
   const [jobTitle, setJobTitle] = useState(initialJobData.jobTitle)
   const [company, setCompany] = useState(initialJobData.company)
   const [salaryRange, setSalaryRange] = useState(initialJobData.salaryRange || '')
   const [industry, setIndustry] = useState(initialJobData.industry || '')
+  const [jobPostingUrl, setJobPostingUrl] = useState(initialJobData.jobPostingUrl || '')
+  const [location, setLocation] = useState(initialJobData.location || '')
+  const [workLocationType, setWorkLocationType] = useState<WorkLocationType | ''>(initialJobData.workLocationType || '')
 
   // Reset form when initialJobData changes
   useEffect(() => {
@@ -49,6 +57,9 @@ export function TailorCompleteDialog({
     setCompany(initialJobData.company)
     setSalaryRange(initialJobData.salaryRange || '')
     setIndustry(initialJobData.industry || '')
+    setJobPostingUrl(initialJobData.jobPostingUrl || '')
+    setLocation(initialJobData.location || '')
+    setWorkLocationType(initialJobData.workLocationType || '')
   }, [initialJobData])
 
   const handleContinue = async () => {
@@ -60,6 +71,9 @@ export function TailorCompleteDialog({
         company: company,
         salary_range: salaryRange || undefined,
         industry: industry || undefined,
+        job_posting_url: jobPostingUrl || undefined,
+        location: location || undefined,
+        work_location_type: workLocationType || undefined,
       })
     } catch (error) {
       console.error('Failed to save job details:', error)
@@ -180,6 +194,77 @@ export function TailorCompleteDialog({
                   value={industry}
                   onChange={(e) => setIndustry(e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Collapsible More Details Section */}
+            <div className="border dark:border-slate-700 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setMoreDetailsOpen(!moreDetailsOpen)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <span>More Details</span>
+                {moreDetailsOpen ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+              <div className={cn(
+                "overflow-hidden transition-all duration-200",
+                moreDetailsOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+              )}>
+                <div className="p-3 space-y-4 border-t dark:border-slate-700">
+                  {/* Job Posting URL */}
+                  <div className="space-y-2">
+                    <Label htmlFor="job-posting-url" className="text-sm font-medium flex items-center gap-1.5">
+                      <Link className="h-3.5 w-3.5" />
+                      Job Posting URL
+                    </Label>
+                    <Input
+                      id="job-posting-url"
+                      type="url"
+                      placeholder="https://..."
+                      value={jobPostingUrl}
+                      onChange={(e) => setJobPostingUrl(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Location + Work Type */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="location" className="text-sm font-medium">
+                        Location
+                      </Label>
+                      <Input
+                        id="location"
+                        type="text"
+                        placeholder="e.g., San Francisco, CA"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="work-type" className="text-sm font-medium">
+                        Work Type
+                      </Label>
+                      <select
+                        id="work-type"
+                        value={workLocationType}
+                        onChange={(e) => setWorkLocationType(e.target.value as WorkLocationType | '')}
+                        className="w-full h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select...</option>
+                        <option value="remote">Remote</option>
+                        <option value="hybrid">Hybrid</option>
+                        <option value="onsite">On-site</option>
+                        <option value="flexible">Flexible</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

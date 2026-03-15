@@ -3,11 +3,14 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/ui/dialog'
-import { Loader2, Link, Type, Target, CheckCircle, AlertTriangle, Lightbulb, RefreshCw, Wand2 } from 'lucide-react'
-import { resumeService, type ParsedResume, type JobData, type MatchResponse } from '@/services/resume'
+import { Loader2, Link, Type, Target, RefreshCw, Wand2, Lightbulb } from 'lucide-react'
+import { resumeService, type ParsedResume, type JobData, type EnhancedMatchResponse } from '@/services/resume'
 import { updateHistoryItem, type MatchResults } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { cn } from '@/lib/utils'
+import { ScoreBreakdownPanel } from '@/components/ScoreBreakdownPanel'
+import { StrengthCard } from '@/components/StrengthCard'
+import { GapCard } from '@/components/GapCard'
 
 export interface NewMatchDialogProps {
   open: boolean
@@ -15,7 +18,7 @@ export interface NewMatchDialogProps {
   resumeContent: Record<string, unknown>
   historyItemId?: string
   onMatchComplete: (results: MatchResults, jobData: JobData) => void
-  onRetailor: (jobData: JobData, matchResult: MatchResponse) => void
+  onRetailor: (jobData: JobData, matchResult: EnhancedMatchResponse) => void
 }
 
 export function NewMatchDialog({
@@ -31,7 +34,7 @@ export function NewMatchDialog({
   const [jobDescription, setJobDescription] = useState('')
   const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
-  const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
+  const [matchResult, setMatchResult] = useState<EnhancedMatchResponse | null>(null)
   const [parsedJob, setParsedJob] = useState<JobData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,10 +73,18 @@ export function NewMatchDialog({
       if (historyItemId) {
         const matchResults: MatchResults = {
           match_percentage: result.match_percentage,
-          strengths: result.strengths,
-          gaps: result.gaps,
+          // Convert enhanced strengths to legacy string array
+          strengths: result.strengths.map(s => s.description),
+          // Convert enhanced gaps to legacy string array
+          gaps: result.gaps.map(g => g.description),
           recommendations: result.recommendations,
           matched_at: new Date().toISOString(),
+          // Store enhanced data
+          score_breakdown: result.score_breakdown,
+          experience_analysis: result.experience_analysis,
+          education_analysis: result.education_analysis,
+          strengths_detailed: result.strengths,
+          gaps_detailed: result.gaps,
         }
 
         await updateHistoryItem(historyItemId, {
@@ -93,10 +104,18 @@ export function NewMatchDialog({
     if (matchResult && parsedJob) {
       const matchResults: MatchResults = {
         match_percentage: matchResult.match_percentage,
-        strengths: matchResult.strengths,
-        gaps: matchResult.gaps,
+        // Convert enhanced strengths to legacy string array
+        strengths: matchResult.strengths.map(s => s.description),
+        // Convert enhanced gaps to legacy string array
+        gaps: matchResult.gaps.map(g => g.description),
         recommendations: matchResult.recommendations,
         matched_at: new Date().toISOString(),
+        // Store enhanced data
+        score_breakdown: matchResult.score_breakdown,
+        experience_analysis: matchResult.experience_analysis,
+        education_analysis: matchResult.education_analysis,
+        strengths_detailed: matchResult.strengths,
+        gaps_detailed: matchResult.gaps,
       }
       onMatchComplete(matchResults, parsedJob)
       handleClose()
@@ -220,58 +239,52 @@ export function NewMatchDialog({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-60 overflow-y-auto">
+              {/* Score Breakdown Panel */}
+              {matchResult.score_breakdown && (
+                <ScoreBreakdownPanel breakdown={matchResult.score_breakdown} />
+              )}
+
+              <div className="max-h-60 overflow-y-auto space-y-3">
                 {/* Strengths */}
                 {matchResult.strengths.length > 0 && (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm font-semibold">Strengths</span>
+                    <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                      Strengths ({matchResult.strengths.length})
                     </div>
-                    <ul className="space-y-1 pl-6">
-                      {matchResult.strengths.slice(0, 4).map((strength, idx) => (
-                        <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                          {strength}
-                        </li>
+                    <div className="space-y-2">
+                      {matchResult.strengths.slice(0, 3).map((strength, idx) => (
+                        <StrengthCard key={idx} strength={strength} compact />
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
-                {/* Gaps */}
+                {/* Gaps - sorted by severity */}
                 {matchResult.gaps.length > 0 && (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-sm font-semibold">Gaps</span>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-red-600 dark:text-red-400">
+                      Gaps ({matchResult.gaps.length})
+                      {matchResult.gaps.filter(g => g.severity === 'critical').length > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                          {matchResult.gaps.filter(g => g.severity === 'critical').length} critical
+                        </span>
+                      )}
                     </div>
-                    <ul className="space-y-1 pl-6">
-                      {matchResult.gaps.slice(0, 4).map((gap, idx) => (
-                        <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                          {gap}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="space-y-2">
+                      {/* Sort gaps by severity: critical first, then important, then nice_to_have */}
+                      {[...matchResult.gaps]
+                        .sort((a, b) => {
+                          const order = { critical: 0, important: 1, nice_to_have: 2 }
+                          return order[a.severity] - order[b.severity]
+                        })
+                        .slice(0, 4)
+                        .map((gap, idx) => (
+                          <GapCard key={idx} gap={gap} compact />
+                        ))}
+                    </div>
                   </div>
                 )}
               </div>
-
-              {/* Recommendations */}
-              {matchResult.recommendations.length > 0 && (
-                <div className="space-y-2 border-t dark:border-slate-700 pt-4">
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <Lightbulb className="h-4 w-4" />
-                    <span className="text-sm font-semibold">Recommendations</span>
-                  </div>
-                  <ul className="space-y-1.5 pl-6">
-                    {matchResult.recommendations.slice(0, 3).map((rec, idx) => (
-                      <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
 
             {/* Actions */}

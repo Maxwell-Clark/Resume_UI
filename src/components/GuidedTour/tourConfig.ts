@@ -5,6 +5,7 @@ export interface TourStep {
   title: string
   content: string
   placement?: 'top' | 'bottom' | 'left' | 'right' | 'center'
+  mobilePlacement?: 'bottom-sheet' | 'top-sheet'
 }
 
 export const tourSteps: Record<TourId, TourStep[]> = {

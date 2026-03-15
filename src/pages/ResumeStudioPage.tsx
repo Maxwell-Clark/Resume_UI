@@ -22,10 +22,14 @@ import {
   type Resume,
   type ParsedResume,
   type JobData,
-  type MatchResponse,
+  type EnhancedMatchResponse,
   type TailorResponse,
-  resumeService
+  resumeService,
+  generateRetailorPrompt as generateEnhancedRetailorPrompt
 } from '@/services/resume'
+import { ScoreBreakdownPanel } from '@/components/ScoreBreakdownPanel'
+import { StrengthCard } from '@/components/StrengthCard'
+import { GapCard } from '@/components/GapCard'
 import { cn } from '@/lib/utils'
 
 type TabType = 'studio' | 'create'
@@ -91,7 +95,7 @@ function StudioTab() {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
   
   // Match functionality state
-  const [matchResult, setMatchResult] = useState<MatchResponse | null>(null)
+  const [matchResult, setMatchResult] = useState<EnhancedMatchResponse | null>(null)
   const [isCheckingMatch, setIsCheckingMatch] = useState(false)
   const [showMatchResults, setShowMatchResults] = useState(false)
   
@@ -200,13 +204,13 @@ function StudioTab() {
     return await handleApiResponse<TailorResponse>(response)
   }
 
-  const matchResume = async (resume: ParsedResume, job: JobData): Promise<MatchResponse> => {
+  const matchResume = async (resume: ParsedResume, job: JobData): Promise<EnhancedMatchResponse> => {
     const payload = {
       resume_jsonresume: resume,
       job_json: job
     }
 
-    const response = await authenticatedFetch('/match', {
+    const response = await authenticatedFetch('/match/enhanced?include_details=true', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -214,7 +218,7 @@ function StudioTab() {
       body: JSON.stringify(payload),
     })
 
-    return await handleApiResponse<MatchResponse>(response)
+    return await handleApiResponse<EnhancedMatchResponse>(response)
   }
 
   const getMatchColor = (percentage: number) => {
@@ -223,25 +227,9 @@ function StudioTab() {
     return 'text-red-600 dark:text-red-400'
   }
 
-  const generateRetailorPrompt = (matchResult: MatchResponse): string => {
-    const gapsText = matchResult.gaps.length > 0
-      ? `\n- The following gaps were identified:\n${matchResult.gaps.map(gap => `  • ${gap}`).join('\n')}`
-      : '\n- No significant gaps were identified.'
-
-    const recommendationsText = matchResult.recommendations.length > 0
-      ? `\n- Recommended improvements:\n${matchResult.recommendations.map((rec, idx) => `  ${idx + 1}. ${rec}`).join('\n')}`
-      : '\n- No specific recommendations provided.'
-
-    return `${DEFAULT_PROMPT}
-
-MATCH ANALYSIS RESULTS:
-The resume was analyzed against the job description and achieved a ${matchResult.match_percentage}% match score.${gapsText}${recommendationsText}
-
-PRIORITY FOCUS:
-- Address the identified gaps by incorporating relevant skills, experiences, or achievements that align with the job requirements.
-- Prioritize improvements that will increase the match score while maintaining truth and accuracy.
-- Emphasize the recommended improvements in the resume tailoring process.
-- Focus on bridging the gap between current resume content and job requirements through strategic rewording and emphasis.`
+  // Use the enhanced retailor prompt generator from resume service
+  const generateRetailorPrompt = (matchResult: EnhancedMatchResponse): string => {
+    return generateEnhancedRetailorPrompt(matchResult)
   }
 
   const handleCheckMatch = async () => {
@@ -292,10 +280,18 @@ PRIORITY FOCUS:
             await updateHistoryItem(existingHistory.id, {
               match_results: {
                 match_percentage: result.match_percentage,
-                strengths: result.strengths,
-                gaps: result.gaps,
+                // Convert enhanced strengths to legacy string array
+                strengths: result.strengths.map(s => s.description),
+                // Convert enhanced gaps to legacy string array
+                gaps: result.gaps.map(g => g.description),
                 recommendations: result.recommendations,
                 matched_at: new Date().toISOString(),
+                // Store enhanced data
+                score_breakdown: result.score_breakdown,
+                experience_analysis: result.experience_analysis,
+                education_analysis: result.education_analysis,
+                strengths_detailed: result.strengths,
+                gaps_detailed: result.gaps,
               }
             })
           }
@@ -351,10 +347,18 @@ PRIORITY FOCUS:
         industry: industry || undefined,
         match_results: matchResult ? {
           match_percentage: matchResult.match_percentage,
-          strengths: matchResult.strengths,
-          gaps: matchResult.gaps,
+          // Convert enhanced strengths to legacy string array
+          strengths: matchResult.strengths.map(s => s.description),
+          // Convert enhanced gaps to legacy string array
+          gaps: matchResult.gaps.map(g => g.description),
           recommendations: matchResult.recommendations,
           matched_at: new Date().toISOString(),
+          // Store enhanced data
+          score_breakdown: matchResult.score_breakdown,
+          experience_analysis: matchResult.experience_analysis,
+          education_analysis: matchResult.education_analysis,
+          strengths_detailed: matchResult.strengths,
+          gaps_detailed: matchResult.gaps,
         } : undefined,
         job_json: job,
       })
@@ -623,78 +627,102 @@ PRIORITY FOCUS:
         {/* Match Results */}
         {matchResult && showMatchResults && (
           <div className="mt-4 pt-4 border-t dark:border-slate-700 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Match Score Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Match Analysis</h3>
               </div>
-              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full" data-tour="match-score">
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score:</span>
-                <span className={`text-2xl font-bold ${getMatchColor(matchResult.match_percentage)}`}>
-                  {matchResult.match_percentage}%
-                </span>
-                <Tooltip content="80%+ excellent, 60-79% good, <60% needs work">
-                  <HelpCircle className="h-4 w-4 text-slate-400" />
-                </Tooltip>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full" data-tour="match-score">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Match Score:</span>
+                  <span className={`text-2xl font-bold ${getMatchColor(matchResult.match_percentage)}`}>
+                    {matchResult.match_percentage}%
+                  </span>
+                  <Tooltip content="80%+ excellent, 60-79% good, <60% needs work">
+                    <HelpCircle className="h-4 w-4 text-slate-400" />
+                  </Tooltip>
+                </div>
               </div>
             </div>
+
+            {/* Score Breakdown Panel */}
+            {matchResult.score_breakdown && (
+              <div className="mb-4">
+                <ScoreBreakdownPanel breakdown={matchResult.score_breakdown} defaultExpanded={false} />
+              </div>
+            )}
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               {/* Strengths */}
               <div className="space-y-4" data-tour="strengths-section">
                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                   <ThumbsUp className="h-5 w-5" />
-                  <h4 className="font-semibold">Strengths</h4>
+                  <h4 className="font-semibold">Strengths ({matchResult.strengths.length})</h4>
                   <Tooltip content="Skills that align well with the job">
                     <HelpCircle className="h-4 w-4 text-green-400" />
                   </Tooltip>
                 </div>
-                <ul className="space-y-2">
-                  {matchResult.strengths.map((strength, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>{strength}</span>
-                    </li>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {matchResult.strengths.slice(0, 5).map((strength, index) => (
+                    <StrengthCard key={index} strength={strength} compact />
                   ))}
-                </ul>
+                  {matchResult.strengths.length === 0 && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No specific strengths identified</p>
+                  )}
+                </div>
               </div>
 
-              {/* Gaps */}
+              {/* Gaps - sorted by severity */}
               <div className="space-y-4" data-tour="gaps-section">
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
                   <AlertTriangle className="h-5 w-5" />
-                  <h4 className="font-semibold">Missing Requirements</h4>
+                  <h4 className="font-semibold">Gaps ({matchResult.gaps.length})</h4>
+                  {matchResult.gaps.filter(g => g.severity === 'critical').length > 0 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                      {matchResult.gaps.filter(g => g.severity === 'critical').length} critical
+                    </span>
+                  )}
                   <Tooltip content="Requirements you may be missing">
                     <HelpCircle className="h-4 w-4 text-red-400" />
                   </Tooltip>
                 </div>
-                <ul className="space-y-2">
-                  {matchResult.gaps.map((gap, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                      <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                      <span>{gap}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {/* Sort gaps by severity: critical first, then important, then nice_to_have */}
+                  {[...matchResult.gaps]
+                    .sort((a, b) => {
+                      const order = { critical: 0, important: 1, nice_to_have: 2 }
+                      return order[a.severity] - order[b.severity]
+                    })
+                    .slice(0, 5)
+                    .map((gap, index) => (
+                      <GapCard key={index} gap={gap} compact />
+                    ))}
+                  {matchResult.gaps.length === 0 && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No gaps identified</p>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Recommendations */}
-            <div className="mb-6 pt-4 border-t dark:border-slate-700">
-              <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Recommended Improvements</h4>
-              <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
-                <ul className="space-y-3">
-                  {matchResult.recommendations.map((rec, index) => (
-                    <li key={index} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
-                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {index + 1}
-                      </div>
-                      <span className="pt-0.5">{rec}</span>
-                    </li>
-                  ))}
-                </ul>
+            {matchResult.recommendations.length > 0 && (
+              <div className="mb-6 pt-4 border-t dark:border-slate-700">
+                <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Recommended Improvements</h4>
+                <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4">
+                  <ul className="space-y-3">
+                    {matchResult.recommendations.map((rec, index) => (
+                      <li key={index} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
+                        <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <span className="pt-0.5">{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
+            )}
 
             <p className="text-sm text-slate-500 dark:text-slate-400 italic mb-6">
               The tailoring prompt has been updated to address the identified gaps.

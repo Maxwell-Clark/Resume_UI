@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import type { TourStep as TourStepConfig } from './tourConfig'
 
 interface TourStepProps {
@@ -36,11 +37,15 @@ export function TourStep({
 }: TourStepProps) {
   const [position, setPosition] = useState<Position>({ top: 0, left: 0, targetRect: null })
   const [mounted, setMounted] = useState(false)
+  const isMobile = useIsMobile()
+
+  // Swipe gesture state
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const calculatePosition = useCallback(() => {
     const targetElement = document.querySelector(`[data-tour="${step.target}"]`)
+
     if (!targetElement) {
-      // If target not found, center the popover
       setPosition({
         top: window.innerHeight / 2 - 100,
         left: window.innerWidth / 2 - 150,
@@ -50,55 +55,18 @@ export function TourStep({
     }
 
     const targetRect = targetElement.getBoundingClientRect()
-    const popoverWidth = 320
-    const popoverHeight = 180
-    const offset = 12
-    const scrollX = window.scrollX || window.pageXOffset
-    const scrollY = window.scrollY || window.pageYOffset
 
-    let top = 0
-    let left = 0
-    const placement = step.placement || 'bottom'
-
-    switch (placement) {
-      case 'top':
-        top = targetRect.top - popoverHeight - offset + scrollY
-        left = targetRect.left + targetRect.width / 2 - popoverWidth / 2 + scrollX
-        break
-      case 'bottom':
-        top = targetRect.bottom + offset + scrollY
-        left = targetRect.left + targetRect.width / 2 - popoverWidth / 2 + scrollX
-        break
-      case 'left':
-        top = targetRect.top + targetRect.height / 2 - popoverHeight / 2 + scrollY
-        left = targetRect.left - popoverWidth - offset + scrollX
-        break
-      case 'right':
-        top = targetRect.top + targetRect.height / 2 - popoverHeight / 2 + scrollY
-        left = targetRect.right + offset + scrollX
-        break
-      case 'center':
-        // Center the popover in the viewport while still highlighting the target
-        top = window.innerHeight / 2 - popoverHeight / 2 + scrollY
-        left = window.innerWidth / 2 - popoverWidth / 2 + scrollX
-        break
+    if (isMobile) {
+      // On mobile we only need the targetRect for the spotlight — popover is fixed to bottom
+      setPosition({ top: 0, left: 0, targetRect })
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
     }
 
-    // Keep within viewport bounds
-    const padding = 16
-    const maxLeft = window.innerWidth - popoverWidth - padding + scrollX
-    const minLeft = padding + scrollX
-    const maxTop = window.innerHeight - popoverHeight - padding + scrollY
-    const minTop = padding + scrollY
-
-    left = Math.max(minLeft, Math.min(maxLeft, left))
-    top = Math.max(minTop, Math.min(maxTop, top))
-
-    setPosition({ top, left, targetRect })
-
-    // Scroll target into view if needed
+    // Desktop: only need targetRect for spotlight — popover is CSS-centered
+    setPosition({ top: 0, left: 0, targetRect })
     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [step.target, step.placement])
+  }, [step.target, isMobile])
 
   useEffect(() => {
     setMounted(true)
@@ -114,7 +82,7 @@ export function TourStep({
     }
   }, [calculatePosition])
 
-  // Handle keyboard navigation
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -134,22 +102,48 @@ export function TourStep({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onNext, onPrev, onSkip, onComplete, isFirstStep, isLastStep])
 
+  // Touch/swipe handlers for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY }
+  }, [])
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchStartRef.current) return
+      const touch = e.changedTouches[0]
+      const dx = touch.clientX - touchStartRef.current.x
+      const dy = touch.clientY - touchStartRef.current.y
+
+      // Only trigger on horizontal swipes (not vertical scrolls)
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) {
+          // Swipe left → next
+          if (isLastStep) onComplete()
+          else onNext()
+        } else {
+          // Swipe right → previous
+          if (!isFirstStep) onPrev()
+        }
+      }
+      touchStartRef.current = null
+    },
+    [onNext, onPrev, onComplete, isFirstStep, isLastStep]
+  )
+
   if (!mounted) return null
 
-  const arrowClasses = {
-    top: 'bottom-[-8px] left-1/2 -translate-x-1/2 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent border-b-transparent border-t-white dark:border-t-slate-800',
-    bottom: 'top-[-8px] left-1/2 -translate-x-1/2 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-t-transparent border-b-white dark:border-b-slate-800',
-    left: 'right-[-8px] top-1/2 -translate-y-1/2 border-t-[8px] border-b-[8px] border-l-[8px] border-t-transparent border-b-transparent border-r-transparent border-l-white dark:border-l-slate-800',
-    right: 'left-[-8px] top-1/2 -translate-y-1/2 border-t-[8px] border-b-[8px] border-r-[8px] border-t-transparent border-b-transparent border-l-transparent border-r-white dark:border-r-slate-800',
-  }
-
-  const placement = step.placement || 'bottom'
-
+  // --- Overlay ---
   const spotlightOverlay = position.targetRect ? (
     <>
-      {/* Semi-transparent overlay */}
-      <div className="fixed inset-0 z-[90] bg-black/50 transition-opacity duration-200" />
-      {/* Spotlight cutout using box-shadow */}
+      <div
+        className={cn(
+          'fixed inset-0 z-[90] bg-black/50 transition-opacity duration-200',
+          isMobile && 'pointer-events-none'
+        )}
+        onClick={!isMobile ? onSkip : undefined}
+      />
+      {/* Spotlight cutout */}
       <div
         className="fixed z-[91] pointer-events-none"
         style={{
@@ -161,7 +155,7 @@ export function TourStep({
           boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
         }}
       />
-      {/* Highlight ring around target */}
+      {/* Highlight ring */}
       <div
         className="fixed z-[92] pointer-events-none border-2 border-blue-500 rounded-lg animate-pulse"
         style={{
@@ -173,13 +167,118 @@ export function TourStep({
       />
     </>
   ) : (
-    <div className="fixed inset-0 z-[90] bg-black/50 transition-opacity duration-200" />
+    <div
+      className={cn(
+        'fixed inset-0 z-[90] bg-black/50 transition-opacity duration-200',
+        isMobile && 'pointer-events-none'
+      )}
+      onClick={!isMobile ? onSkip : undefined}
+    />
   )
 
+  // --- Mobile bottom-sheet ---
+  if (isMobile) {
+    const mobileSheet = (
+      <div
+        className="fixed inset-x-0 bottom-0 z-[95] bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl border-t border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-8 duration-200 safe-area-bottom pointer-events-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Tour step ${stepNumber} of ${totalSteps}: ${step.title}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Drag handle indicator */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+        </div>
+
+        {/* Header with close */}
+        <div className="flex items-center justify-between px-5 py-2">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            Step {stepNumber} of {totalSteps}
+          </span>
+          <button
+            onClick={onSkip}
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            aria-label="Skip tour"
+          >
+            <X className="h-5 w-5 text-slate-400" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-5 py-2">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            {step.title}
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+            {step.content}
+          </p>
+        </div>
+
+        {/* Footer with navigation + progress dots */}
+        <div className="flex items-center justify-between px-5 pt-3 pb-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onPrev}
+            disabled={isFirstStep}
+            className="min-h-[44px] min-w-[44px] flex items-center gap-1"
+          >
+            <ChevronLeft className="h-5 w-5" />
+            <span className="sr-only sm:not-sr-only">Previous</span>
+          </Button>
+
+          {/* Progress dots */}
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: totalSteps }, (_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'h-1.5 rounded-full transition-all duration-200',
+                  i + 1 === stepNumber
+                    ? 'w-4 bg-blue-500'
+                    : 'w-1.5 bg-slate-300 dark:bg-slate-600'
+                )}
+              />
+            ))}
+          </div>
+
+          {isLastStep ? (
+            <Button
+              size="sm"
+              onClick={onComplete}
+              className="min-h-[44px] flex items-center gap-1"
+            >
+              Finish Tour
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={onNext}
+              className="min-h-[44px] flex items-center gap-1"
+            >
+              Next
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+
+    return createPortal(
+      <>
+        {spotlightOverlay}
+        {mobileSheet}
+      </>,
+      document.body
+    )
+  }
+
+  // --- Desktop popover (centered modal) ---
   const popover = (
     <div
-      className="fixed z-[95] w-80 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 animate-in fade-in-0 zoom-in-95 duration-200"
-      style={{ top: position.top, left: position.left }}
+      className="fixed z-[95] w-80 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 animate-in fade-in-0 zoom-in-95 duration-200"
       role="dialog"
       aria-modal="true"
       aria-label={`Tour step ${stepNumber} of ${totalSteps}: ${step.title}`}
@@ -232,13 +331,6 @@ export function TourStep({
         )}
       </div>
 
-      {/* Arrow - don't show for center placement */}
-      {position.targetRect && placement !== 'center' && (
-        <span
-          className={cn('absolute w-0 h-0', arrowClasses[placement as keyof typeof arrowClasses])}
-          aria-hidden="true"
-        />
-      )}
     </div>
   )
 

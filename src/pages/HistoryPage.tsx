@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover } from '@/components/ui/popover'
 import { ConfirmationDialog, Dialog } from '@/components/ui/dialog'
+import { HistoryDetailModal } from '@/components/HistoryDetailModal'
 import { getHistoryItems, updateHistoryItem, deleteHistoryItem, saveHistoryCache, loadHistoryCache, type HistoryItem } from '@/lib/history'
 import { resumeService } from '@/services/resume'
 import { cn } from '@/lib/utils'
@@ -124,6 +125,7 @@ const StatusBadge = ({
       wrapInButton={false}
       trigger={
         <span
+          onClick={(e) => e.stopPropagation()}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity',
             config.style
@@ -241,7 +243,7 @@ const EditableText = ({
     <p>
       <strong>{label}:</strong>{' '}
       <span
-        onClick={() => setIsEditing(true)}
+        onClick={(e) => { e.stopPropagation(); setIsEditing(true) }}
         className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded px-1 -mx-1 transition-colors"
         title="Click to edit"
       >
@@ -350,7 +352,7 @@ const EditableDate = ({
       <span className="text-slate-600 dark:text-slate-400">
         <strong>{label}:</strong>{' '}
         <span
-          onClick={() => setIsEditing(true)}
+          onClick={(e) => { e.stopPropagation(); setIsEditing(true) }}
           className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 rounded px-1 -mx-1 transition-colors"
           title="Click to edit"
         >
@@ -373,13 +375,18 @@ export function HistoryPage() {
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<HistoryItem['status'] | 'all'>('all')
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const cachedRangesRef = useRef<Map<string, HistoryItem[]>>(new Map())
+  const getAllCachedItemsRef = useRef<HistoryItem[]>([])
   const { addNotification } = useNotifications()
+  const addNotificationRef = useRef(addNotification)
+  addNotificationRef.current = addNotification
   const notifiedItemsRef = useRef<Set<string>>(new Set())
   const [seenItems, setSeenItems] = useState<Set<string>>(() => {
     try {
@@ -429,6 +436,12 @@ export function HistoryPage() {
     
     return items
   }, [cachedRanges])
+
+  // Keep ref in sync with getAllCachedItems
+  getAllCachedItemsRef.current = getAllCachedItems
+
+  // Stable boolean to trigger polling when tailoring items exist
+  const hasTailoringItems = getAllCachedItems.some(item => item.status === 'tailoring')
 
   // Filter items by search query and status, then sort favorites to top
   const filteredItems = useMemo(() => {
@@ -589,62 +602,62 @@ export function HistoryPage() {
 
   // Poll for status updates on items with 'tailoring' status
   useEffect(() => {
-    // Check for pending tailoring ID from localStorage
+    const tailoringItems = getAllCachedItemsRef.current.filter(item => item.status === 'tailoring')
+    // Only poll for tailoring items not already being tracked by useJobStatusPolling
     const pendingId = localStorage.getItem('pending_tailoring_id')
-    const tailoringItems = getAllCachedItems.filter(item => item.status === 'tailoring')
-    const shouldPoll = tailoringItems.length > 0 || !!pendingId
-    
-    if (!shouldPoll) return
+    const unhandledTailoringItems = tailoringItems.filter(item => item.id !== pendingId)
+
+    if (unhandledTailoringItems.length === 0) return
 
     // Track which items were tailoring when polling started
-    const previousTailoringIds = new Set(tailoringItems.map(item => item.id))
+    const previousTailoringIds = new Set(unhandledTailoringItems.map(item => item.id))
+    let pollCount = 0
+    const MAX_POLL_COUNT = 60 // 10 minutes at 10s intervals
 
     const pollInterval = setInterval(async () => {
-      // Get fresh pending ID on each poll
-      const currentPendingId = localStorage.getItem('pending_tailoring_id')
+      pollCount++
+
+      if (pollCount > MAX_POLL_COUNT) {
+        console.warn('History page polling timed out')
+        clearInterval(pollInterval)
+        return
+      }
+
       try {
-        const fetchedItems = await fetchBatch(0, CACHE_BATCH_SIZE)
-        
+        await fetchBatch(0, CACHE_BATCH_SIZE)
+
         // Get current state of all items
-        const allItems = Array.from(cachedRangesRef.current.values()).flat()
-        
-        // Check if pending item is now complete and clear it
-        if (currentPendingId) {
-          const pendingItem = allItems.find(item => item.id === currentPendingId) || fetchedItems.find(item => item.id === currentPendingId)
-          if (pendingItem && pendingItem.status !== 'tailoring') {
-            // Item is no longer tailoring, clear the pending ID
-            localStorage.removeItem('pending_tailoring_id')
-            
-            // Show notification if status is complete and we haven't notified yet
-            if (pendingItem.status === 'complete' && !notifiedItemsRef.current.has(pendingItem.id)) {
-              notifiedItemsRef.current.add(pendingItem.id)
-              addNotification({
+        const allItems = getAllCachedItemsRef.current
+
+        // Check all items that were previously tailoring to see if any changed to complete
+        let allResolved = true
+        allItems.forEach(item => {
+          if (previousTailoringIds.has(item.id)) {
+            if (item.status === 'tailoring') {
+              allResolved = false
+            } else if (item.status === 'complete' && !notifiedItemsRef.current.has(item.id)) {
+              notifiedItemsRef.current.add(item.id)
+              addNotificationRef.current({
                 title: 'Tailoring Complete',
-                message: `${pendingItem.file_name} is ready for download.`,
+                message: `${item.file_name} is ready for download.`,
                 type: 'success'
               })
             }
           }
-        }
-        
-        // Check all items that were previously tailoring to see if any changed to complete
-        allItems.forEach(item => {
-          if (item.status === 'complete' && !notifiedItemsRef.current.has(item.id) && previousTailoringIds.has(item.id)) {
-            notifiedItemsRef.current.add(item.id)
-            addNotification({
-              title: 'Tailoring Complete',
-              message: `${item.file_name} is ready for download.`,
-              type: 'success'
-            })
-          }
         })
+
+        // Stop polling once all tracked items have resolved
+        if (allResolved) {
+          clearInterval(pollInterval)
+        }
       } catch (err) {
         console.error('Failed to poll for status updates:', err)
       }
-    }, 3000) // Poll every 3 seconds
+    }, 10_000) // Poll every 10 seconds
 
     return () => clearInterval(pollInterval)
-  }, [getAllCachedItems, fetchBatch, addNotification])
+    // hasTailoringItems is a boolean so it only re-triggers when tailoring state actually changes
+  }, [fetchBatch, hasTailoringItems])
 
   // Ensure we have the batch for current page
   useEffect(() => {
@@ -881,6 +894,29 @@ export function HistoryPage() {
       }))
   }
 
+  const handleDetailItemUpdate = useCallback((updatedItem: HistoryItem) => {
+    // Update in all cached ranges
+    setCachedRanges(prev => {
+      const newMap = new Map(prev)
+      newMap.forEach((items, key) => {
+        const updatedItems = items.map(item =>
+          item.id === updatedItem.id ? updatedItem : item
+        )
+        newMap.set(key, updatedItems)
+      })
+      return newMap
+    })
+    // Update selected item if it's the one being viewed
+    if (selectedItem?.id === updatedItem.id) {
+      setSelectedItem(updatedItem)
+    }
+  }, [selectedItem])
+
+  const handleOpenDetailModal = (item: HistoryItem) => {
+    setSelectedItem(item)
+    setDetailModalOpen(true)
+  }
+
   const handleDeleteClick = (item: HistoryItem) => {
     setItemToDelete(item)
     setDeleteDialogOpen(true)
@@ -1092,12 +1128,13 @@ export function HistoryPage() {
                   )}
                   <div
                     className={cn(
-                      "bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-3 sm:p-6 relative transition-all duration-300",
+                      "bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-3 sm:p-6 relative transition-all duration-300 cursor-pointer hover:border-blue-300 dark:hover:border-blue-700",
                       isNew
                         ? "border-2 border-transparent bg-gradient-to-r from-white to-white dark:from-slate-800 dark:to-slate-800 animate-border-glow"
                         : "border-slate-200 dark:border-slate-700"
                     )}
                     onMouseEnter={() => isNew && markAsSeen(item.id)}
+                    onClick={() => handleOpenDetailModal(item)}
                   >
               {isNew && (
                 <span
@@ -1129,13 +1166,13 @@ export function HistoryPage() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                    <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400" data-tour={index === 0 ? "editable-field" : undefined}>
                       {/* Mobile: Compact single-line job info */}
-                      <p className="sm:hidden text-sm" data-tour={index === 0 ? "editable-field" : undefined}>
+                      <p className="sm:hidden text-sm">
                         {item.job_title} @ {item.company}
                       </p>
                       {/* Desktop: Editable fields with labels */}
-                      <div className="hidden sm:block" data-tour={index === 0 ? "editable-field" : undefined}>
+                      <div className="hidden sm:block">
                         <EditableText
                           value={item.job_title}
                           onSave={(newValue) => handleFieldUpdate(item.id, 'job_title', newValue)}
@@ -1194,7 +1231,7 @@ export function HistoryPage() {
                   <div className="flex items-center justify-between sm:justify-end mb-1 sm:mb-0" data-tour={index === 0 ? "favorite-star" : undefined}>
                     <Tooltip content="Pin important applications to top">
                       <button
-                        onClick={() => handleToggleFavorite(item.id, item.favorited)}
+                        onClick={(e) => { e.stopPropagation(); handleToggleFavorite(item.id, item.favorited) }}
                         className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                         title={item.favorited ? 'Remove from favorites' : 'Add to favorites'}
                       >
@@ -1213,7 +1250,8 @@ export function HistoryPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         setPreviewItem(item)
                         setPreviewOpen(true)
                       }}
@@ -1226,7 +1264,7 @@ export function HistoryPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleEdit(item)}
+                      onClick={(e) => { e.stopPropagation(); handleEdit(item) }}
                       disabled={(!item.download_url && !item.resume_id) || importingId === item.id || (item.status === 'tailoring' || item.status === 'failed')}
                       className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2"
                     >
@@ -1240,7 +1278,7 @@ export function HistoryPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => item.download_url && window.open(item.download_url, '_blank')}
+                      onClick={(e) => { e.stopPropagation(); if (item.download_url) { window.open(item.download_url, '_blank') } }}
                       disabled={!item.download_url || (item.status === 'tailoring' || item.status === 'failed')}
                       className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2"
                     >
@@ -1250,7 +1288,7 @@ export function HistoryPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDeleteClick(item)}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(item) }}
                       disabled={deletingId === item.id}
                       className="h-8 w-8 p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 flex items-center justify-center sm:justify-start sm:gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
@@ -1372,6 +1410,15 @@ export function HistoryPage() {
 
       {/* Guided Tour */}
       <GuidedTour tourId="history" />
+
+      {/* History Detail Modal */}
+      <HistoryDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        item={selectedItem}
+        onItemUpdate={handleDetailItemUpdate}
+        onEdit={handleEdit}
+      />
     </div>
   )
 }

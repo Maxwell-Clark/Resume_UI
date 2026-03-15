@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { resumeService, generateRetailorPrompt, type ParsedResume, type JobData, type MatchResponse } from '@/services/resume'
+import { resumeService, generateRetailorPrompt, type ParsedResume, type JobData, type EnhancedMatchResponse, type GuaranteedTailorResponse } from '@/services/resume'
 import type { Resume } from '@/services/resume'
-import { getHistoryItemByResumeId, getHistoryItemById, updateHistoryItem, type HistoryItem, type MatchResults } from '@/lib/history'
+import { getHistoryItemByResumeId, getHistoryItemById, updateHistoryItem, getCriticalGapsCount, type HistoryItem, type MatchResults } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { ProButton } from '@/components/ProFeatureGate'
 import { Button } from '@/components/ui/button'
@@ -12,10 +12,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Tooltip } from '@/components/ui/tooltip'
 import { GuidedTour } from '@/components/GuidedTour'
-import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages, ChevronDown, ChevronRight, Target, CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Wand2, RefreshCw, HelpCircle } from 'lucide-react'
+import { Loader2, Save, ArrowLeft, Plus, Trash2, X, User, Briefcase, GraduationCap, Code, FolderKanban, Award, Sparkles, Edit, Download, Eye, Trophy, Heart, BookOpen, Languages, ChevronDown, ChevronRight, Target, CheckCircle, AlertTriangle, Wand2, RefreshCw, HelpCircle, Lightbulb } from 'lucide-react'
 import { AIEditDialog } from '@/components/AIEditDialog'
-import { ApplyRecommendationsDialog } from '@/components/ApplyRecommendationsDialog'
 import { NewMatchDialog } from '@/components/NewMatchDialog'
+import { ScoreBreakdownPanel } from '@/components/ScoreBreakdownPanel'
+import { StrengthCard } from '@/components/StrengthCard'
+import { GapCard } from '@/components/GapCard'
+import { ScoreComparisonCard } from '@/components/ScoreComparisonCard'
 import { Dialog } from '@/components/ui/dialog'
 import type {
   WorkEntry,
@@ -80,19 +83,22 @@ export function ResumeEditorPage() {
   // PDF Preview state
   const [previewOpen, setPreviewOpen] = useState(false)
 
-  // Apply Recommendations dialog state
-  const [recommendationsDialogOpen, setRecommendationsDialogOpen] = useState(false)
 
   // New Match dialog state
   const [newMatchDialogOpen, setNewMatchDialogOpen] = useState(false)
+
   const [currentJobData, setCurrentJobData] = useState<JobData | null>(null)
-  const [currentMatchResult, setCurrentMatchResult] = useState<MatchResponse | null>(null)
+  const [currentMatchResult, setCurrentMatchResult] = useState<EnhancedMatchResponse | null>(null)
 
   // Retailor state
   const [isRetailoring, setIsRetailoring] = useState(false)
+  const [lastGuaranteedResult, setLastGuaranteedResult] = useState<GuaranteedTailorResponse | null>(null)
 
   // Quick rematch state
   const [isRematching, setIsRematching] = useState(false)
+
+  // JD Enhance loading state - tracks which highlight is being enhanced
+  const [enhancingHighlight, setEnhancingHighlight] = useState<{workIndex: number, highlightIndex: number} | null>(null)
 
   // Match panel drawer state - auto-open on large screens
   const [matchPanelOpen, setMatchPanelOpen] = useState(() => {
@@ -104,12 +110,14 @@ export function ResumeEditorPage() {
 
   // Match analysis collapsible sections state
   const [matchSectionsExpanded, setMatchSectionsExpanded] = useState<{
+    scoreBreakdown: boolean
+    keywordAnalysis: boolean
     strengths: boolean
     gaps: boolean
     recommendations: boolean
-  }>({ strengths: true, gaps: true, recommendations: true })
+  }>({ scoreBreakdown: false, keywordAnalysis: false, strengths: true, gaps: true, recommendations: true })
 
-  const toggleMatchSection = (section: 'strengths' | 'gaps' | 'recommendations') => {
+  const toggleMatchSection = (section: 'scoreBreakdown' | 'keywordAnalysis' | 'strengths' | 'gaps' | 'recommendations') => {
     setMatchSectionsExpanded(prev => ({
       ...prev,
       [section]: !prev[section]
@@ -248,12 +256,21 @@ export function ResumeEditorPage() {
       setHistoryItem({ ...historyItem, match_results: results })
     }
     setCurrentJobData(jobData)
-    setCurrentMatchResult({
-      match_percentage: results.match_percentage,
-      strengths: results.strengths,
-      gaps: results.gaps,
-      recommendations: results.recommendations,
-    })
+    // Reconstruct EnhancedMatchResponse from MatchResults (if enhanced data is available)
+    if (results.strengths_detailed && results.gaps_detailed && results.score_breakdown) {
+      setCurrentMatchResult({
+        match_percentage: results.match_percentage,
+        score_breakdown: results.score_breakdown,
+        experience_analysis: results.experience_analysis!,
+        education_analysis: results.education_analysis!,
+        strengths: results.strengths_detailed,
+        gaps: results.gaps_detailed,
+        recommendations: results.recommendations,
+      })
+    } else {
+      // Fallback for legacy data - create minimal enhanced response
+      setCurrentMatchResult(null)
+    }
     addNotification({
       title: 'Match Analysis Complete',
       message: `Your resume achieved a ${results.match_percentage}% match score.`,
@@ -262,14 +279,20 @@ export function ResumeEditorPage() {
   }, [historyItem, addNotification])
 
   // Handle retailor
-  const handleRetailor = useCallback(async (jobData?: JobData, matchResult?: MatchResponse) => {
+  const handleRetailor = useCallback(async (jobData?: JobData, matchResult?: EnhancedMatchResponse) => {
     // Try: passed param > currentJobData > historyItem.job_json
     const job = jobData || currentJobData || (historyItem?.job_json as JobData | undefined)
-    const match = matchResult || currentMatchResult || (historyItem?.match_results ? {
-      match_percentage: historyItem.match_results.match_percentage,
-      strengths: historyItem.match_results.strengths,
-      gaps: historyItem.match_results.gaps,
-      recommendations: historyItem.match_results.recommendations,
+    // Build match data for retailor prompt - works with both enhanced and legacy data
+    const historyMatch = historyItem?.match_results
+    const match = matchResult || currentMatchResult || (historyMatch ? {
+      match_percentage: historyMatch.match_percentage,
+      // Use detailed data if available, otherwise convert legacy
+      strengths: historyMatch.strengths_detailed || historyMatch.strengths.map(s => ({ description: s, confidence: 80, evidence: [], category: 'general' })),
+      gaps: historyMatch.gaps_detailed || historyMatch.gaps.map(g => ({ description: g, severity: 'important' as const, category: 'general', recommendation: '' })),
+      recommendations: historyMatch.recommendations,
+      score_breakdown: historyMatch.score_breakdown || { overall: historyMatch.match_percentage, skills_match: 0, experience_match: 0, education_match: 0, ats_compatibility: 0, ai_role_fit: 0 },
+      experience_analysis: historyMatch.experience_analysis || { years_required: null, years_found: 0, relevance_score: 0, seniority_match: 'match' as const, relevant_roles: [] },
+      education_analysis: historyMatch.education_analysis || { degree_match: false, field_match: false },
     } : null)
 
     if (!job || !match) {
@@ -282,22 +305,32 @@ export function ResumeEditorPage() {
     }
 
     setIsRetailoring(true)
+    setLastGuaranteedResult(null) // Clear previous result
 
     try {
       const resumeContent = resume?.content || buildResumeContent()
       const prompt = generateRetailorPrompt(match)
       const fileName = `${resumeName || 'Resume'}_Tailored_${Date.now()}`
 
+      // Use guaranteed mode for verified improvement
       const result = await resumeService.tailorResume(
         resumeContent as ParsedResume,
         job,
         fileName,
-        historyItem?.id,
-        prompt
-      )
+        {
+          historyId: historyItem?.id,
+          customPrompt: prompt,
+          guaranteed: true,
+          baselineMatch: match, // Pass baseline to avoid re-computing
+          maxRetries: 2,
+        }
+      ) as GuaranteedTailorResponse
+
+      // Store the guaranteed result for display
+      setLastGuaranteedResult(result)
 
       // Get the download URL
-      const downloadUrl = result.storage.public_url || result.storage.url || result.storage.signed_url || ''
+      const downloadUrl = result.storage?.public_url || result.storage?.url || ''
 
       // Update history item
       if (historyItem) {
@@ -309,11 +342,27 @@ export function ResumeEditorPage() {
         }
       }
 
+      // Show success with score improvement details
+      const improvementText = result.score_improvement > 0
+        ? `Score improved from ${result.baseline_score}% to ${result.final_score}% (+${result.score_improvement}%)`
+        : result.score_improvement === 0
+        ? `Score maintained at ${result.final_score}%`
+        : `Score: ${result.final_score}% (${result.score_improvement}%)`
+
       addNotification({
-        title: 'Resume Tailored',
-        message: 'Your resume has been retailored. Check the History page to download.',
-        type: 'success'
+        title: result.verification_passed ? 'Resume Tailored Successfully' : 'Resume Tailored with Warnings',
+        message: `${improvementText}. Check the History page to download.`,
+        type: result.verification_passed ? 'success' : 'warning'
       })
+
+      // Show warning for keywords lost
+      if (result.keywords_lost.length > 0) {
+        addNotification({
+          title: 'Keywords Lost',
+          message: `${result.keywords_lost.length} keyword(s) were lost during tailoring: ${result.keywords_lost.slice(0, 3).join(', ')}${result.keywords_lost.length > 3 ? '...' : ''}`,
+          type: 'warning'
+        })
+      }
     } catch (err) {
       console.error('Retailor failed:', err)
       addNotification({
@@ -344,16 +393,24 @@ export function ResumeEditorPage() {
     try {
       const resumeContent = resume?.content || buildResumeContent()
 
-      // Run match analysis
+      // Run enhanced match analysis
       const result = await resumeService.matchResume(resumeContent as ParsedResume, job)
 
-      // Build match results
+      // Build match results with enhanced data
       const matchResults: MatchResults = {
         match_percentage: result.match_percentage,
-        strengths: result.strengths,
-        gaps: result.gaps,
+        // Convert enhanced strengths to legacy string array
+        strengths: result.strengths.map(s => s.description),
+        // Convert enhanced gaps to legacy string array
+        gaps: result.gaps.map(g => g.description),
         recommendations: result.recommendations,
         matched_at: new Date().toISOString(),
+        // Store enhanced data
+        score_breakdown: result.score_breakdown,
+        experience_analysis: result.experience_analysis,
+        education_analysis: result.education_analysis,
+        strengths_detailed: result.strengths,
+        gaps_detailed: result.gaps,
       }
 
       // Save match results to history
@@ -1115,6 +1172,52 @@ export function ResumeEditorPage() {
     setEditingField(null)
   }
 
+  // Build enhancement prompt using match results context
+  const buildJDEnhancePrompt = (
+    bulletText: string,
+    matchResults: MatchResults
+  ): string => {
+    const gaps = matchResults.gaps_detailed
+      ?.filter(g => g.category === 'experience')
+      ?.slice(0, 3) || []
+
+    const recommendations = matchResults.recommendations?.slice(0, 3) || []
+
+    return `Enhance this resume bullet point to better match the job description.
+
+Current bullet: "${bulletText}"
+
+Instructions:
+- Address these gaps if applicable: ${gaps.map(g => g.description).join('; ') || 'none'}
+- Apply these recommendations: ${recommendations.join('; ') || 'none'}
+- Keep it concise (1-2 lines)
+- Use strong action verbs
+- Maintain truthfulness - only reword, don't invent new achievements`
+  }
+
+  // Handle quick JD enhance for a single highlight
+  const handleQuickEnhance = async (workIndex: number, highlightIndex: number) => {
+    if (!historyItem?.match_results) return
+
+    setEnhancingHighlight({ workIndex, highlightIndex })
+    try {
+      const bullet = work[workIndex].highlights[highlightIndex]
+      const prompt = buildJDEnhancePrompt(bullet, historyItem.match_results)
+      const enhanced = await resumeService.editText(bullet, prompt)
+
+      const updated = [...work]
+      updated[workIndex].highlights[highlightIndex] = enhanced
+      setWork(updated)
+
+      addNotification({ title: 'Enhanced', message: 'Bullet point improved for job match', type: 'success' })
+    } catch (error) {
+      console.error('JD enhance failed:', error)
+      addNotification({ title: 'Error', message: 'Failed to enhance bullet', type: 'error' })
+    } finally {
+      setEnhancingHighlight(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1520,6 +1623,25 @@ export function ResumeEditorPage() {
                         >
                           <Sparkles className="h-4 w-4" />
                         </ProButton>
+                        {/* Quick JD Enhance button - only shown when match results exist */}
+                        {historyItem?.match_results && (
+                          <Tooltip content="Enhance for job match">
+                            <ProButton
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleQuickEnhance(index, hIndex)}
+                              disabled={enhancingHighlight !== null}
+                              className="h-8 px-2"
+                              featureName="JD Enhance"
+                              featureDescription="Quickly enhance this bullet point using job description analysis (keywords, gaps, recommendations)."
+                            >
+                              {enhancingHighlight?.workIndex === index && enhancingHighlight?.highlightIndex === hIndex
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <Target className="h-4 w-4" />
+                              }
+                            </ProButton>
+                          </Tooltip>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => removeHighlight(index, hIndex)}>
                           <X className="h-4 w-4" />
                         </Button>
@@ -2297,8 +2419,15 @@ export function ResumeEditorPage() {
                       {historyItem.match_results.match_percentage}%
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {getCriticalGapsCount(historyItem.match_results) > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                        {getCriticalGapsCount(historyItem.match_results)} critical
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -2323,18 +2452,6 @@ export function ResumeEditorPage() {
                         Retailor Resume
                       </>
                     )}
-                  </ProButton>
-                  <ProButton
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={!historyItem?.match_results?.recommendations?.length || isRetailoring}
-                    onClick={() => setRecommendationsDialogOpen(true)}
-                    featureName="Apply Recommendations"
-                    featureDescription="Let AI apply the recommended changes to your resume. Quickly implement improvements."
-                  >
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    Apply Recommendations
                   </ProButton>
                   {historyItem?.job_json && (
                     <div data-tour="quick-rematch-button">
@@ -2365,6 +2482,23 @@ export function ResumeEditorPage() {
                   )}
                 </div>
 
+                {/* Guaranteed Tailor Result - Show score comparison when available */}
+                {lastGuaranteedResult && (
+                  <ScoreComparisonCard
+                    baselineScore={lastGuaranteedResult.baseline_score}
+                    finalScore={lastGuaranteedResult.final_score}
+                    scoreImprovement={lastGuaranteedResult.score_improvement}
+                    attempts={lastGuaranteedResult.attempts}
+                    verificationPassed={lastGuaranteedResult.verification_passed}
+                    warnings={lastGuaranteedResult.warnings}
+                  />
+                )}
+
+                {/* Score Breakdown Panel - Enhanced data only */}
+                {historyItem.match_results.score_breakdown && (
+                  <ScoreBreakdownPanel breakdown={historyItem.match_results.score_breakdown} />
+                )}
+
                 {/* Strengths - Collapsible */}
                 {historyItem.match_results.strengths.length > 0 && (
                   <div className="space-y-2">
@@ -2384,13 +2518,21 @@ export function ResumeEditorPage() {
                       </span>
                     </button>
                     {matchSectionsExpanded.strengths && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.strengths.map((strength, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {strength}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.strengths_detailed ? (
+                          historyItem.match_results.strengths_detailed.map((strength, idx) => (
+                            <StrengthCard key={idx} strength={strength} compact />
+                          ))
+                        ) : (
+                          <ul className="space-y-1.5 pl-6">
+                            {historyItem.match_results.strengths.map((strength, idx) => (
+                              <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                                {strength}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -2412,21 +2554,39 @@ export function ResumeEditorPage() {
                       <span className="text-xs text-slate-400 dark:text-slate-500">
                         ({historyItem.match_results.gaps.length})
                       </span>
+                      {getCriticalGapsCount(historyItem.match_results) > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ml-auto">
+                          {getCriticalGapsCount(historyItem.match_results)} critical
+                        </span>
+                      )}
                     </button>
                     {matchSectionsExpanded.gaps && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.gaps.map((gap, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {gap}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.gaps_detailed ? (
+                          [...historyItem.match_results.gaps_detailed]
+                            .sort((a, b) => {
+                              const order = { critical: 0, important: 1, nice_to_have: 2 }
+                              return order[a.severity] - order[b.severity]
+                            })
+                            .map((gap, idx) => (
+                              <GapCard key={idx} gap={gap} compact />
+                            ))
+                        ) : (
+                          <ul className="space-y-1.5 pl-6">
+                            {historyItem.match_results.gaps.map((gap, idx) => (
+                              <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                                {gap}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Recommendations - Collapsible */}
-                {historyItem.match_results.recommendations.length > 0 && (
+                {historyItem.match_results.recommendations && historyItem.match_results.recommendations.length > 0 && (
                   <div className="space-y-2">
                     <button
                       onClick={() => toggleMatchSection('recommendations')}
@@ -2444,16 +2604,19 @@ export function ResumeEditorPage() {
                       </span>
                     </button>
                     {matchSectionsExpanded.recommendations && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.recommendations.map((rec, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {rec}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <ul className="space-y-1.5 pl-6">
+                          {historyItem.match_results.recommendations.map((recommendation, idx) => (
+                            <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                              {recommendation}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </div>
                 )}
+
               </div>
             ) : (
               <div className="text-center py-8">
@@ -2521,8 +2684,15 @@ export function ResumeEditorPage() {
                       {historyItem.match_results.match_percentage}%
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Matched {new Date(historyItem.match_results.matched_at).toLocaleDateString()} at {new Date(historyItem.match_results.matched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {getCriticalGapsCount(historyItem.match_results) > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                        {getCriticalGapsCount(historyItem.match_results)} critical
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -2547,18 +2717,6 @@ export function ResumeEditorPage() {
                         Retailor Resume
                       </>
                     )}
-                  </ProButton>
-                  <ProButton
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={!historyItem?.match_results?.recommendations?.length || isRetailoring}
-                    onClick={() => setRecommendationsDialogOpen(true)}
-                    featureName="Apply Recommendations"
-                    featureDescription="Let AI apply the recommended changes to your resume. Quickly implement improvements."
-                  >
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    Apply Recommendations
                   </ProButton>
                   {historyItem?.job_json && (
                     <div data-tour="quick-rematch-button">
@@ -2589,6 +2747,23 @@ export function ResumeEditorPage() {
                   )}
                 </div>
 
+                {/* Guaranteed Tailor Result - Show score comparison when available */}
+                {lastGuaranteedResult && (
+                  <ScoreComparisonCard
+                    baselineScore={lastGuaranteedResult.baseline_score}
+                    finalScore={lastGuaranteedResult.final_score}
+                    scoreImprovement={lastGuaranteedResult.score_improvement}
+                    attempts={lastGuaranteedResult.attempts}
+                    verificationPassed={lastGuaranteedResult.verification_passed}
+                    warnings={lastGuaranteedResult.warnings}
+                  />
+                )}
+
+                {/* Score Breakdown Panel - Enhanced data only */}
+                {historyItem.match_results.score_breakdown && (
+                  <ScoreBreakdownPanel breakdown={historyItem.match_results.score_breakdown} />
+                )}
+
                 {/* Strengths - Collapsible */}
                 {historyItem.match_results.strengths.length > 0 && (
                   <div className="space-y-2">
@@ -2608,13 +2783,21 @@ export function ResumeEditorPage() {
                       </span>
                     </button>
                     {matchSectionsExpanded.strengths && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.strengths.map((strength, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {strength}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.strengths_detailed ? (
+                          historyItem.match_results.strengths_detailed.map((strength, idx) => (
+                            <StrengthCard key={idx} strength={strength} compact />
+                          ))
+                        ) : (
+                          <ul className="space-y-1.5 pl-6">
+                            {historyItem.match_results.strengths.map((strength, idx) => (
+                              <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                                {strength}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -2636,21 +2819,39 @@ export function ResumeEditorPage() {
                       <span className="text-xs text-slate-400 dark:text-slate-500">
                         ({historyItem.match_results.gaps.length})
                       </span>
+                      {getCriticalGapsCount(historyItem.match_results) > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ml-auto">
+                          {getCriticalGapsCount(historyItem.match_results)} critical
+                        </span>
+                      )}
                     </button>
                     {matchSectionsExpanded.gaps && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.gaps.map((gap, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {gap}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {historyItem.match_results.gaps_detailed ? (
+                          [...historyItem.match_results.gaps_detailed]
+                            .sort((a, b) => {
+                              const order = { critical: 0, important: 1, nice_to_have: 2 }
+                              return order[a.severity] - order[b.severity]
+                            })
+                            .map((gap, idx) => (
+                              <GapCard key={idx} gap={gap} compact />
+                            ))
+                        ) : (
+                          <ul className="space-y-1.5 pl-6">
+                            {historyItem.match_results.gaps.map((gap, idx) => (
+                              <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                                {gap}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Recommendations - Collapsible */}
-                {historyItem.match_results.recommendations.length > 0 && (
+                {historyItem.match_results.recommendations && historyItem.match_results.recommendations.length > 0 && (
                   <div className="space-y-2">
                     <button
                       onClick={() => toggleMatchSection('recommendations')}
@@ -2668,16 +2869,19 @@ export function ResumeEditorPage() {
                       </span>
                     </button>
                     {matchSectionsExpanded.recommendations && (
-                      <ul className="space-y-1.5 pl-6 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {historyItem.match_results.recommendations.map((rec, idx) => (
-                          <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
-                            {rec}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <ul className="space-y-1.5 pl-6">
+                          {historyItem.match_results.recommendations.map((recommendation, idx) => (
+                            <li key={idx} className="text-xs text-slate-600 dark:text-slate-400 list-disc">
+                              {recommendation}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </div>
                 )}
+
               </div>
             ) : (
               <div className="text-center py-8">
@@ -2735,24 +2939,6 @@ export function ResumeEditorPage() {
           )}
         </div>
       </Dialog>
-
-      {/* Apply Recommendations Dialog */}
-      {historyItem?.match_results?.recommendations && (
-        <ApplyRecommendationsDialog
-          open={recommendationsDialogOpen}
-          onOpenChange={setRecommendationsDialogOpen}
-          recommendations={historyItem.match_results.recommendations}
-          sectionData={{
-            summary: basics.summary,
-            skills: skills,
-            experience: work
-          }}
-          onApplySummary={(newSummary) => setBasics(prev => ({ ...prev, summary: newSummary }))}
-          onApplySkills={(newSkills) => setSkills(newSkills)}
-          onApplyExperience={(newWork) => setWork(newWork)}
-          onRetailor={() => handleRetailor()}
-        />
-      )}
 
       {/* New Match Dialog */}
       <NewMatchDialog

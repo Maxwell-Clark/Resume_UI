@@ -134,3 +134,8 @@
 .animate-border-glow {
   animation: border-glow 2s ease-in-out infinite;
 }
+
+/* Safe area padding for iPhone home indicator */
+.safe-area-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

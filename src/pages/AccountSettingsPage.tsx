@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { User, Bell, Shield, CreditCard, Loader2, Check, AlertCircle } from 'lucide-react'
+import { User, Bell, Shield, CreditCard, Loader2, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTourContext } from '@/contexts/TourContext'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { billingService } from '@/services/billing'
 
 export function AccountSettingsPage() {
   const { user, updateUser } = useAuth()
+  const { resetAllTours } = useTourContext()
   const { billingStatus, loading: billingLoading, refreshBillingStatus } = useSubscription()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -44,6 +46,7 @@ export function AccountSettingsPage() {
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [notificationSuccess, setNotificationSuccess] = useState<string | null>(null)
+  const [tourResetSuccess, setTourResetSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -541,6 +544,41 @@ export function AccountSettingsPage() {
                 ) : (
                   'Save Preferences'
                 )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Guided Tour */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <RotateCcw className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Guided Tour</h2>
+          </div>
+          <div className="space-y-4">
+            {tourResetSuccess && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2">
+                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <p className="text-sm text-green-600 dark:text-green-400">{tourResetSuccess}</p>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Reset Guide</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Replay the guided tour to revisit tips and features across all pages
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  resetAllTours()
+                  setTourResetSuccess('Guided tour has been reset! Visit any page to start the tour again.')
+                  setTimeout(() => setTourResetSuccess(null), 5000)
+                }}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset Guide
               </Button>
             </div>
           </div>

@@ -1,13 +1,44 @@
 import { authenticatedFetch, handleApiResponse } from './auth'
+import type {
+  MatchScoreBreakdown,
+  ExperienceAnalysisResponse,
+  EducationAnalysisResponse,
+  StrengthItem,
+  GapItem,
+} from '@/services/resume'
 
 export type StatusType = 'tailoring' | 'tailored' | 'applied' | 'interviewing' | 'rejected' | 'ghosted' | 'hired' | 'complete' | 'failed'
+export type WorkLocationType = 'remote' | 'hybrid' | 'onsite' | 'flexible'
+export type PriorityType = 'low' | 'medium' | 'high'
 
 export interface MatchResults {
   match_percentage: number
+  // Legacy string arrays for backward compatibility
   strengths: string[]
   gaps: string[]
   recommendations: string[]
   matched_at: string
+  // Enhanced analysis fields (optional for backward compatibility)
+  score_breakdown?: MatchScoreBreakdown
+  experience_analysis?: ExperienceAnalysisResponse
+  education_analysis?: EducationAnalysisResponse
+  strengths_detailed?: StrengthItem[]
+  gaps_detailed?: GapItem[]
+}
+
+/**
+ * Check if match results have enhanced data
+ */
+export function hasEnhancedMatchData(results: MatchResults | null | undefined): boolean {
+  return !!(results?.score_breakdown || results?.strengths_detailed || results?.gaps_detailed)
+}
+
+/**
+ * Get the count of critical gaps from enhanced match results
+ */
+export function getCriticalGapsCount(results: MatchResults | null | undefined): number {
+  if (!results?.gaps_detailed) return 0
+  return results.gaps_detailed.filter(g => g.severity === 'critical').length
 }
 
 export interface JobData {
@@ -34,6 +65,16 @@ export interface HistoryItem {
   industry?: string
   match_results?: MatchResults
   job_json?: JobData
+  // Enhanced job details
+  job_posting_url?: string
+  location?: string
+  work_location_type?: WorkLocationType
+  application_deadline?: string
+  notes?: string
+  contact_person?: string
+  contact_email?: string
+  source?: string
+  priority?: PriorityType
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -56,6 +97,16 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
         industry: item.industry || null,
         match_results: item.match_results || null,
         job_json: item.job_json || null,
+        // Enhanced job details
+        job_posting_url: item.job_posting_url || null,
+        location: item.location || null,
+        work_location_type: item.work_location_type || null,
+        application_deadline: item.application_deadline || null,
+        notes: item.notes || null,
+        contact_person: item.contact_person || null,
+        contact_email: item.contact_email || null,
+        source: item.source || null,
+        priority: item.priority || null,
       }),
     })
 
@@ -76,6 +127,15 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       industry: data.industry,
       match_results: data.match_results,
       job_json: data.job_json,
+      job_posting_url: data.job_posting_url,
+      location: data.location,
+      work_location_type: data.work_location_type,
+      application_deadline: data.application_deadline,
+      notes: data.notes,
+      contact_person: data.contact_person,
+      contact_email: data.contact_email,
+      source: data.source,
+      priority: data.priority,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
@@ -86,7 +146,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
 export async function getHistoryItems(offset: number = 0, limit: number = 50): Promise<HistoryItem[]> {
   try {
     const response = await authenticatedFetch(`/history?limit=${limit}&offset=${offset}`)
-    
+
     const data = await handleApiResponse<HistoryItem[]>(response)
     return data.map((item: HistoryItem) => ({
       id: item.id.toString(),
@@ -102,6 +162,17 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
       favorited: item.favorited || false,
       match_results: item.match_results,
       job_json: item.job_json,
+      salary_range: item.salary_range,
+      industry: item.industry,
+      job_posting_url: item.job_posting_url,
+      location: item.location,
+      work_location_type: item.work_location_type,
+      application_deadline: item.application_deadline,
+      notes: item.notes,
+      contact_person: item.contact_person,
+      contact_email: item.contact_email,
+      source: item.source,
+      priority: item.priority,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
@@ -112,9 +183,9 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
 export async function getHistoryItemById(id: string): Promise<HistoryItem | null> {
   try {
     const response = await authenticatedFetch(`/history/${id}`)
-    
+
     if (response.status === 404) return null
-    
+
     const item = await handleApiResponse<HistoryItem>(response)
     return {
       id: item.id.toString(),
@@ -130,6 +201,17 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       favorited: item.favorited || false,
       match_results: item.match_results,
       job_json: item.job_json,
+      salary_range: item.salary_range,
+      industry: item.industry,
+      job_posting_url: item.job_posting_url,
+      location: item.location,
+      work_location_type: item.work_location_type,
+      application_deadline: item.application_deadline,
+      notes: item.notes,
+      contact_person: item.contact_person,
+      contact_email: item.contact_email,
+      source: item.source,
+      priority: item.priority,
     }
   } catch (error) {
     console.error('Error fetching history item:', error)
@@ -158,6 +240,17 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
       favorited: item.favorited || false,
       match_results: item.match_results,
       job_json: item.job_json,
+      salary_range: item.salary_range,
+      industry: item.industry,
+      job_posting_url: item.job_posting_url,
+      location: item.location,
+      work_location_type: item.work_location_type,
+      application_deadline: item.application_deadline,
+      notes: item.notes,
+      contact_person: item.contact_person,
+      contact_email: item.contact_email,
+      source: item.source,
+      priority: item.priority,
     }
   } catch (error) {
     console.error('Error fetching history item by resume_id:', error)
@@ -167,7 +260,7 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
 
 export async function updateHistoryItem(
   id: string,
-  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name' | 'favorited' | 'company' | 'job_title' | 'match_results' | 'job_json' | 'salary_range' | 'industry'>>
+  updates: Partial<Pick<HistoryItem, 'download_url' | 'status' | 'status_dates' | 'file_name' | 'favorited' | 'company' | 'job_title' | 'match_results' | 'job_json' | 'salary_range' | 'industry' | 'job_posting_url' | 'location' | 'work_location_type' | 'application_deadline' | 'notes' | 'contact_person' | 'contact_email' | 'source' | 'priority'>>
 ): Promise<HistoryItem> {
   try {
     const response = await authenticatedFetch(`/history/${id}`, {
@@ -193,6 +286,17 @@ export async function updateHistoryItem(
       favorited: item.favorited || false,
       match_results: item.match_results,
       job_json: item.job_json,
+      salary_range: item.salary_range,
+      industry: item.industry,
+      job_posting_url: item.job_posting_url,
+      location: item.location,
+      work_location_type: item.work_location_type,
+      application_deadline: item.application_deadline,
+      notes: item.notes,
+      contact_person: item.contact_person,
+      contact_email: item.contact_email,
+      source: item.source,
+      priority: item.priority,
     }
   } catch (error) {
     console.error('Error updating history item:', error)
@@ -205,7 +309,7 @@ export async function deleteHistoryItem(id: string): Promise<void> {
     const response = await authenticatedFetch(`/history/${id}`, {
       method: 'DELETE',
     })
-    
+
     if (!response.ok) {
       throw new Error('Failed to delete history item')
     }
@@ -245,14 +349,14 @@ export function loadHistoryCache(): Map<string, HistoryItem[]> | null {
   try {
     const cached = localStorage.getItem(HISTORY_CACHE_KEY)
     if (!cached) return null
-    
+
     const cacheObject: Record<string, HistoryItem[]> = JSON.parse(cached)
     const map = new Map<string, HistoryItem[]>()
-    
+
     Object.entries(cacheObject).forEach(([key, items]) => {
       map.set(key, items)
     })
-    
+
     return map
   } catch (error) {
     console.error('Error loading history cache from localStorage:', error)
