@@ -1,25 +1,31 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { AuthModalProvider, useAuthModal } from '@/contexts/AuthModalContext'
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext'
 import { StripeProvider } from '@/contexts/StripeContext'
 import { TourProvider } from '@/contexts/TourContext'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AuthModal } from '@/components/AuthModal'
 import { CheckoutSuccessModal } from '@/components/CheckoutSuccessModal'
-import { LandingPage } from '@/pages/LandingPage'
-import { HistoryPage } from '@/pages/HistoryPage'
-import { AccountSettingsPage } from '@/pages/AccountSettingsPage'
-import { AuthCallbackPage } from '@/pages/AuthCallbackPage'
-import { PricingPage } from '@/pages/PricingPage'
-import { FAQPage } from '@/pages/FAQPage'
-import { AboutPage } from '@/pages/AboutPage'
-import { ContactPage } from '@/pages/ContactPage'
-import { FeaturesPage } from '@/pages/FeaturesPage'
-import { ResumeEditorPage } from '@/pages/ResumeEditorPage'
-import { ResumeStudioPage } from '@/pages/ResumeStudioPage'
+import { PageSpinner } from '@/components/PageSpinner'
+import { TemplateProvider } from '@/contexts/TemplateContext'
+
+// Lazy-loaded page components
+const LandingPage = lazy(() => import('@/pages/LandingPage').then(m => ({ default: m.LandingPage })))
+const HistoryPage = lazy(() => import('@/pages/HistoryPage').then(m => ({ default: m.HistoryPage })))
+const AccountSettingsPage = lazy(() => import('@/pages/AccountSettingsPage').then(m => ({ default: m.AccountSettingsPage })))
+const AuthCallbackPage = lazy(() => import('@/pages/AuthCallbackPage').then(m => ({ default: m.AuthCallbackPage })))
+const PricingPage = lazy(() => import('@/pages/PricingPage').then(m => ({ default: m.PricingPage })))
+const FAQPage = lazy(() => import('@/pages/FAQPage').then(m => ({ default: m.FAQPage })))
+const AboutPage = lazy(() => import('@/pages/AboutPage').then(m => ({ default: m.AboutPage })))
+const ContactPage = lazy(() => import('@/pages/ContactPage').then(m => ({ default: m.ContactPage })))
+const FeaturesPage = lazy(() => import('@/pages/FeaturesPage').then(m => ({ default: m.FeaturesPage })))
+const ResumeEditorPage = lazy(() => import('@/pages/ResumeEditorPage').then(m => ({ default: m.ResumeEditorPage })))
+const ResumeStudioPage = lazy(() => import('@/pages/ResumeStudioPage').then(m => ({ default: m.ResumeStudioPage })))
+const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(m => ({ default: m.TemplatesPage })))
 
 function ProtectedLayout() {
   return (
@@ -109,10 +115,13 @@ function App() {
       <BrowserRouter>
         <StripeProvider>
           <SubscriptionProvider>
+            <TemplateProvider>
             <AuthModalProvider>
               <TourProvider>
             <AuthModal />
             <CheckoutSuccessHandler />
+            <ErrorBoundary>
+            <Suspense fallback={<PageSpinner />}>
             <Routes>
             <Route path="/login" element={<LoginRedirect />} />
             <Route path="/signup" element={<SignupRedirect />} />
@@ -127,6 +136,7 @@ function App() {
               <Route path="studio" element={<ResumeStudioPage />} />
               <Route path="tailor" element={<Navigate to="/studio" replace />} />
               <Route path="match" element={<Navigate to="/studio" replace />} />
+              <Route path="templates" element={<TemplatesPage />} />
               <Route path="editor" element={<ResumeEditorPage />} />
               <Route path="editor/:id" element={<ResumeEditorPage />} />
               <Route path="history" element={<HistoryPage />} />
@@ -134,8 +144,11 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
+            </ErrorBoundary>
               </TourProvider>
             </AuthModalProvider>
+            </TemplateProvider>
           </SubscriptionProvider>
         </StripeProvider>
       </BrowserRouter>

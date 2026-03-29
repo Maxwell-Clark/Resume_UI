@@ -130,6 +130,8 @@ export interface TailorOptions {
   baselineMatch?: EnhancedMatchResponse
   /** Max retry attempts when guaranteed=true (0-5, default 2) */
   maxRetries?: number
+  /** Template ID for PDF styling (passed to backend when supported) */
+  templateId?: string
 }
 
 export const DEFAULT_TAILOR_PROMPT = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
@@ -310,15 +312,19 @@ export const resumeService = {
   /**
    * Convert resume content to PDF
    */
-  async convertResumeToPdf(content: Record<string, unknown>, filename?: string): Promise<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }> {
+  async convertResumeToPdf(content: Record<string, unknown>, filename?: string, templateId?: string): Promise<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }> {
     const params = new URLSearchParams({
       format: 'pdf',
       store: 'true',
       bucket: 'resumes',
     })
-    
+
     if (filename) {
       params.append('filename', filename)
+    }
+
+    if (templateId) {
+      params.append('template', templateId)
     }
 
     const response = await authenticatedFetch(`/convert?${params.toString()}`, {
@@ -427,6 +433,10 @@ export const resumeService = {
 
     if (options?.historyId) {
       params.append('history_id', options.historyId)
+    }
+
+    if (options?.templateId) {
+      params.append('template', options.templateId)
     }
 
     if (options?.guaranteed) {

@@ -60,6 +60,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const status = await billingService.getBillingStatus()
       setBillingStatus(status)
     } catch (err) {
+      // Error is logged; user-facing feedback is provided via the `error` state exposed by this context
       console.error('Failed to fetch billing status:', err)
       setError(err instanceof Error ? err.message : 'Failed to load subscription status')
       setBillingStatus(defaultBillingStatus)

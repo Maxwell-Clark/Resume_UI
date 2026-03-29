@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 440" fill="none">
+  <rect width="340" height="440" fill="#ffffff" rx="4"/>
+  <!-- Centered header -->
+  <rect x="90" y="25" width="160" height="14" rx="2" fill="#1e293b"/>
+  <rect x="100" y="45" width="140" height="7" rx="1" fill="#64748b"/>
+  <rect x="60" y="58" width="220" height="5" rx="1" fill="#94a3b8"/>
+  <!-- Separator -->
+  <rect x="30" y="74" width="280" height="1.5" fill="#334155"/>
+  <!-- Summary -->
+  <rect x="30" y="84" width="280" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="94" width="260" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="104" width="270" height="5" rx="1" fill="#cbd5e1"/>
+  <!-- Experience section -->
+  <rect x="120" y="122" width="100" height="8" rx="1" fill="#1e293b"/>
+  <rect x="30" y="134" width="280" height="0.5" fill="#cbd5e1"/>
+  <rect x="30" y="142" width="150" height="7" rx="1" fill="#334155"/>
+  <rect x="230" y="142" width="80" height="6" rx="1" fill="#94a3b8"/>
+  <rect x="30" y="154" width="280" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="164" width="260" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="174" width="270" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="189" width="140" height="7" rx="1" fill="#334155"/>
+  <rect x="230" y="189" width="80" height="6" rx="1" fill="#94a3b8"/>
+  <rect x="30" y="201" width="270" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="211" width="280" height="5" rx="1" fill="#cbd5e1"/>
+  <!-- Two-column: Education + Certifications -->
+  <rect x="65" y="232" width="80" height="8" rx="1" fill="#1e293b"/>
+  <rect x="210" y="232" width="90" height="8" rx="1" fill="#1e293b"/>
+  <rect x="30" y="244" width="130" height="0.5" fill="#cbd5e1"/>
+  <rect x="180" y="244" width="130" height="0.5" fill="#cbd5e1"/>
+  <!-- Education column -->
+  <rect x="30" y="250" width="120" height="6" rx="1" fill="#334155"/>
+  <rect x="30" y="260" width="100" height="5" rx="1" fill="#94a3b8"/>
+  <rect x="30" y="270" width="110" height="5" rx="1" fill="#cbd5e1"/>
+  <!-- Certifications column -->
+  <rect x="180" y="250" width="120" height="6" rx="1" fill="#334155"/>
+  <rect x="180" y="260" width="100" height="5" rx="1" fill="#94a3b8"/>
+  <rect x="180" y="270" width="110" height="5" rx="1" fill="#cbd5e1"/>
+  <!-- Skills -->
+  <rect x="130" y="292" width="80" height="8" rx="1" fill="#1e293b"/>
+  <rect x="30" y="304" width="280" height="0.5" fill="#cbd5e1"/>
+  <rect x="30" y="312" width="55" height="5" rx="1" fill="#334155"/>
+  <rect x="90" y="312" width="180" height="5" rx="1" fill="#cbd5e1"/>
+  <rect x="30" y="322" width="50" height="5" rx="1" fill="#334155"/>
+  <rect x="90" y="322" width="160" height="5" rx="1" fill="#cbd5e1"/>
+</svg>

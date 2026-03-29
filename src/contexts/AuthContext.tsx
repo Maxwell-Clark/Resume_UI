@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
+        // Error is logged; AuthContext has no access to addNotification so the UI relies on the loading/user state
         console.error('Error getting session:', error)
       }
       setSession(session as Session | null)

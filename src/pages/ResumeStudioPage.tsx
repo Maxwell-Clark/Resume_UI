@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useTemplate } from '@/contexts/TemplateContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -25,7 +26,8 @@ import {
   type EnhancedMatchResponse,
   type TailorResponse,
   resumeService,
-  generateRetailorPrompt as generateEnhancedRetailorPrompt
+  generateRetailorPrompt as generateEnhancedRetailorPrompt,
+  DEFAULT_TAILOR_PROMPT,
 } from '@/services/resume'
 import { ScoreBreakdownPanel } from '@/components/ScoreBreakdownPanel'
 import { StrengthCard } from '@/components/StrengthCard'
@@ -34,61 +36,17 @@ import { cn } from '@/lib/utils'
 
 type TabType = 'studio' | 'create'
 
-const DEFAULT_PROMPT = `Tailor the resume to achieve maximum alignment with the job description. Return ONLY a single valid JSON object matching the JSON Resume schema. Do NOT include Markdown, code fences, LaTeX, or any text outside the JSON.
-
-STRATEGIC ANALYSIS:
-- Extract the top 10 job-critical terms from the JD (skills, tools, methods, responsibilities, outcomes).
-- Build an internal TRANSFERABILITY MAP that pairs each JD term to the closest evidence in the resume using this ladder:
-  TIER 1: Exact match (same tool/method appears in resume).
-  TIER 2: Synonym/near-equivalent supported by resume (e.g., 'financial modeling' ↔ 'forecasting/variance models in Excel').
-  TIER 3: Parent/neutral concept supported by resume (e.g., 'valuation' ↔ 'financial analysis'; 'DevOps' ↔ 'automation/monitoring').
-- Use only terms that can be justified by TIER 1–3 evidence. If no evidence exists, omit the JD term.
-
-TRUTH & SCOPE GUARDRAILS:
-- Preserve employers, titles, dates, locations, and metrics exactly. Do not add new employers/titles/dates.
-- Do not add tools, certifications, or frameworks that are not in the resume. Use broader parent terms instead (TIER 3) when needed.
-- You may rewrite text fields only: summary, work[].highlights, projects[].highlights, and reorder skills[].keywords.
-- If a section/field is missing in the input, leave it missing.
-
-BULLET STYLE (ATS):
-- One sentence each, 10–22 words, start with a strong verb, end with a period, plain ASCII.
-- Present tense for current role; past tense for previous roles.
-- Include 1–2 JD-aligned terms per bullet from the TRANSFERABILITY MAP (avoid stuffing).
-- Keep numbers/units exactly as in the resume; never invent metrics.
-- Remove filler and duplicates; prefer outcomes, scale, ownership, quality, compliance, or speed.
-
-WHAT TO SURFACE (DOMAIN-AGNOSTIC):
-- Ownership and scope (end-to-end delivery, accountability, deadlines, stakeholders).
-- Scale/throughput/volume (transactions, clients, reports, patients, campaigns, etc.).
-- Methods/tools the JD cares about (only if present; otherwise use parent terms: analysis, automation, reporting, controls, documentation, testing, compliance).
-- Cross-functional collaboration (finance, ops, product, legal, clinicians, sales, etc.).
-- Performance/quality improvements (latency, accuracy, error rate, audit readiness, customer satisfaction, on-time delivery).
-
-SKILLS SECTION:
-- Reorder to place JD-relevant skills first. Group logically (Languages/Tools/Methods/Platforms).
-- Ensure any tool/method mentioned in bullets appears in skills[].keywords. Do not add skills not in the resume; use parent terms instead.
-- Remove stray sentences; keep skills as nouns/phrases only.
-
-HYGIENE:
-- Move location strings (e.g., 'Remote – City, ST') into the location field, not bullets.
-- Ensure each work entry has 2–6 bullets (rewrite/merge existing content to reach at least 2 without invention).
-- Preserve section order and all non-text fields.
-
-SELF-CHECK BEFORE OUTPUT (internal only):
-- Validate JSON against schema. No extra text outside JSON.
-- Verify every bullet follows length/tense/period rules and uses only TIER 1–3 mapped terms.
-- Confirm no new tools/titles/dates/certs were introduced.`
-
 // ============================================================================
 // STUDIO TAB COMPONENT (Combined Tailor + Match)
 // ============================================================================
 function StudioTab() {
+  const { selectedTemplateId } = useTemplate()
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
   const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
   const [jobDescription, setJobDescription] = useState('')
   const [isJobDescriptionLink, setIsJobDescriptionLink] = useState(false)
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT)
+  const [prompt, setPrompt] = useState(DEFAULT_TAILOR_PROMPT)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filename, setFileName] = useState<string>('Tailored_Resume')
@@ -191,6 +149,10 @@ function StudioTab() {
     
     if (historyId) {
       params.append('history_id', historyId)
+    }
+
+    if (selectedTemplateId) {
+      params.append('template', selectedTemplateId)
     }
 
     const response = await authenticatedFetch(`/tailor?${params.toString()}`, {

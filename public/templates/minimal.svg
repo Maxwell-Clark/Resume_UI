@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 440" fill="none">
+  <rect width="340" height="440" fill="#ffffff" rx="4"/>
+  <!-- Minimal: lots of whitespace, thin lines -->
+  <rect x="40" y="40" width="160" height="14" rx="2" fill="#1e293b"/>
+  <rect x="40" y="60" width="100" height="6" rx="1" fill="#94a3b8"/>
+  <rect x="40" y="72" width="220" height="5" rx="1" fill="#cbd5e1"/>
+  <!-- Thin separator -->
+  <rect x="40" y="92" width="260" height="0.5" fill="#e2e8f0"/>
+  <!-- Experience -->
+  <rect x="40" y="106" width="70" height="7" rx="1" fill="#64748b" opacity="0.7"/>
+  <rect x="40" y="122" width="140" height="6" rx="1" fill="#1e293b"/>
+  <rect x="220" y="122" width="80" height="5" rx="1" fill="#94a3b8"/>
+  <rect x="40" y="134" width="240" height="4" rx="1" fill="#e2e8f0"/>
+  <rect x="40" y="143" width="220" height="4" rx="1" fill="#e2e8f0"/>
+  <rect x="40" y="160" width="130" height="6" rx="1" fill="#1e293b"/>
+  <rect x="220" y="160" width="80" height="5" rx="1" fill="#94a3b8"/>
+  <rect x="40" y="172" width="230" height="4" rx="1" fill="#e2e8f0"/>
+  <rect x="40" y="181" width="250" height="4" rx="1" fill="#e2e8f0"/>
+  <!-- Thin separator -->
+  <rect x="40" y="200" width="260" height="0.5" fill="#e2e8f0"/>
+  <!-- Education -->
+  <rect x="40" y="214" width="65" height="7" rx="1" fill="#64748b" opacity="0.7"/>
+  <rect x="40" y="230" width="160" height="6" rx="1" fill="#1e293b"/>
+  <rect x="40" y="242" width="180" height="4" rx="1" fill="#e2e8f0"/>
+  <!-- Thin separator -->
+  <rect x="40" y="262" width="260" height="0.5" fill="#e2e8f0"/>
+  <!-- Skills -->
+  <rect x="40" y="276" width="35" height="7" rx="1" fill="#64748b" opacity="0.7"/>
+  <rect x="40" y="292" width="50" height="4" rx="1" fill="#cbd5e1"/>
+  <rect x="100" y="292" width="45" height="4" rx="1" fill="#cbd5e1"/>
+  <rect x="155" y="292" width="55" height="4" rx="1" fill="#cbd5e1"/>
+  <rect x="220" y="292" width="40" height="4" rx="1" fill="#cbd5e1"/>
+</svg>

@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty') && if [[ \"$FILE\" =~ \\.(ts|tsx)$ ]]; then cd \"$CLAUDE_PROJECT_DIR\" && npx eslint --fix \"$FILE\" 2>/dev/null; fi || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npx tsc -b --noEmit 2>&1 | head -20"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "which notify-send >/dev/null 2>&1 && notify-send 'Claude Code - Resume UI' 'Needs your attention' || true"
+          }
+        ]
+      }
+    ]
+  }
+}

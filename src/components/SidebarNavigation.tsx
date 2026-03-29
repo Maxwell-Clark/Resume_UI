@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Sparkles, History, User } from 'lucide-react'
+import { Sparkles, LayoutTemplate, History, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SidebarNavigationProps {
@@ -11,6 +11,7 @@ export function SidebarNavigation({ onLinkClick }: SidebarNavigationProps) {
 
   const links = [
     { to: '/studio', label: 'Resume Studio', icon: Sparkles, isActive: (path: string) => path.startsWith('/studio') },
+    { to: '/templates', label: 'Templates', icon: LayoutTemplate },
     { to: '/history', label: 'History', icon: History },
     { to: '/account', label: 'Account', icon: User },
   ]

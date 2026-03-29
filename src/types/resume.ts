@@ -2,6 +2,7 @@
 
 export interface PersonInfo {
   name?: string
+  label?: string
   email?: string
   phone?: string
   location?: string

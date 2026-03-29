@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { getHistoryItemById, type HistoryItem } from '@/lib/history'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { toUserMessage } from '@/lib/errors'
 
 const POLL_INTERVAL_MS = 10_000
 const MAX_POLL_COUNT = 60 // 10 minutes at 10s intervals
@@ -64,6 +65,11 @@ export function useJobStatusPolling(historyId: string | null, onComplete: (item:
         }
       } catch (error) {
         console.error('Error polling job status:', error)
+        addNotification({
+          title: 'Status Check Failed',
+          message: toUserMessage(error, 'Unable to check tailoring status. Will retry automatically.'),
+          type: 'error',
+        })
       }
     }
 
