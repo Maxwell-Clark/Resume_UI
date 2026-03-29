@@ -39,7 +39,7 @@ export interface UseAIEditReturn {
 }
 
 interface UseAIEditOptions {
-  basics: { name: string; email: string; phone: string; summary: string; location: string; website: string }
+  basics: { name: string; label: string; email: string; phone: string; summary: string; location: string; website: string }
   setBasics: (basics: UseAIEditOptions['basics']) => void
   workOps: ArrayFieldOps<WorkEntry>
   educationOps: ArrayFieldOps<EducationEntry>
