@@ -40,7 +40,7 @@ type TabType = 'studio' | 'create'
 // STUDIO TAB COMPONENT (Combined Tailor + Match)
 // ============================================================================
 function StudioTab() {
-  const { selectedTemplateId } = useTemplate()
+  const { selectedTemplateId, primaryColor, secondaryColor } = useTemplate()
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
   const [resumeSelectionDialogOpen, setResumeSelectionDialogOpen] = useState(false)
@@ -153,6 +153,14 @@ function StudioTab() {
 
     if (selectedTemplateId) {
       params.append('template', selectedTemplateId)
+    }
+
+    if (primaryColor) {
+      params.append('primary_color', primaryColor)
+    }
+
+    if (secondaryColor) {
+      params.append('secondary_color', secondaryColor)
     }
 
     const response = await authenticatedFetch(`/tailor?${params.toString()}`, {

@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PublicLayout } from '@/components/PublicLayout'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
-import { billingService, type BillingStatus } from '@/services/billing'
+import { useSubscription } from '@/contexts/SubscriptionContext'
+import { billingService } from '@/services/billing'
 import { StripeCheckoutModal } from '@/components/StripeCheckoutModal'
 import { Check, Loader2, AlertCircle } from 'lucide-react'
 
@@ -13,10 +14,10 @@ const STRIPE_PRICE_PREMIUM = import.meta.env.VITE_STRIPE_PRICE_PREMIUM || ''
 
 export function PricingPage() {
   const { user } = useAuth()
+  const { billingStatus } = useSubscription()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
-  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,25 +35,6 @@ export function PricingPage() {
       setError('Checkout was cancelled. Feel free to try again when you\'re ready.')
     }
   }, [searchParams])
-
-  // Fetch billing status if user is logged in
-  useEffect(() => {
-    async function fetchBillingStatus() {
-      if (!user) return
-
-      try {
-        setLoading(true)
-        const status = await billingService.getBillingStatus()
-        setBillingStatus(status)
-      } catch (err) {
-        console.error('Failed to fetch billing status:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBillingStatus()
-  }, [user])
 
   const handleSubscribe = (priceId: string, planName: string, planPrice: string) => {
     if (!user) {
@@ -83,7 +65,8 @@ export function PricingPage() {
 
   const isCurrentPlan = (planName: string) => {
     if (!billingStatus) return false
-    return billingStatus.plan_name.toLowerCase() === planName.toLowerCase()
+    const currentPlan = billingStatus.entitlements?.plan_name ?? billingStatus.plan_name
+    return currentPlan.toLowerCase() === planName.toLowerCase()
   }
 
   const getButtonText = (plan: typeof plans[0]) => {
@@ -193,7 +176,7 @@ export function PricingPage() {
         {user && billingStatus && billingStatus.has_subscription && (
           <div className="max-w-md mx-auto mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <p className="text-blue-800 dark:text-blue-200 text-center">
-              You're on the <strong className="capitalize">{billingStatus.plan_name}</strong> plan
+              You're on the <strong className="capitalize">{billingStatus.entitlements?.plan_name ?? billingStatus.plan_name}</strong> plan
               {billingStatus.status === 'trialing' && ' (trial)'}
               {billingStatus.cancel_at_period_end && ' (cancels at period end)'}
             </p>

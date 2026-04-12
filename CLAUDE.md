@@ -2,6 +2,10 @@
 
 AI-powered resume tailoring SaaS frontend. Users upload resumes, paste job descriptions, get AI-tailored resumes with match scoring, and export to PDF. Connects to the AiResume FastAPI backend at `VITE_API_BASE_URL`.
 
+## Backend
+
+The backend for this project lives at `../AiResume` (FastAPI). Reference it for API contracts, endpoint definitions, and data models.
+
 ## Tech Stack
 
 - React 19, TypeScript 5.8 (strict), Vite 7

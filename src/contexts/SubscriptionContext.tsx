@@ -73,8 +73,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     fetchBillingStatus()
   }, [fetchBillingStatus])
 
-  const isPro = billingStatus?.has_subscription === true &&
+  const isActive = billingStatus?.has_subscription === true &&
     (billingStatus?.status === 'active' || billingStatus?.status === 'trialing')
+  const planName = billingStatus?.entitlements?.plan_name ?? billingStatus?.plan_name ?? 'free'
+  const isPro = isActive && (planName === 'premium' || planName === 'pro')
 
   return (
     <SubscriptionContext.Provider

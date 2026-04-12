@@ -312,7 +312,7 @@ export const resumeService = {
   /**
    * Convert resume content to PDF
    */
-  async convertResumeToPdf(content: Record<string, unknown>, filename?: string, templateId?: string): Promise<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }> {
+  async convertResumeToPdf(content: Record<string, unknown>, filename?: string, templateId?: string, primaryColor?: string, secondaryColor?: string): Promise<{ storage: { public_url: string; url: string; signed_url?: string }; format: string }> {
     const params = new URLSearchParams({
       format: 'pdf',
       store: 'true',
@@ -325,6 +325,14 @@ export const resumeService = {
 
     if (templateId) {
       params.append('template', templateId)
+    }
+
+    if (primaryColor) {
+      params.append('primary_color', primaryColor)
+    }
+
+    if (secondaryColor) {
+      params.append('secondary_color', secondaryColor)
     }
 
     const response = await authenticatedFetch(`/convert?${params.toString()}`, {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star, Eye } from 'lucide-react'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { History, Download, FileText, Calendar, Loader2, CheckCircle, XCircle, ChevronDown, Send, MessageSquare, Ban, UserX, Trophy, Edit, Trash2, ChevronLeft, ChevronRight, Search, X, Star, Eye, List, Columns3 } from 'lucide-react'
 import { Tooltip } from '@/components/ui/tooltip'
 import { GuidedTour } from '@/components/GuidedTour'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { ConfirmationDialog, Dialog } from '@/components/ui/dialog'
 import { HistoryDetailModal } from '@/components/HistoryDetailModal'
 import { getHistoryItems, updateHistoryItem, deleteHistoryItem, saveHistoryCache, loadHistoryCache, type HistoryItem } from '@/lib/history'
 import { resumeService } from '@/services/resume'
+import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { cn } from '@/lib/utils'
 import { useNotifications } from '@/contexts/NotificationContext'
 
@@ -382,6 +383,18 @@ export function HistoryPage() {
   const [statusFilterOpen, setStatusFilterOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeView = (searchParams.get('view') as 'list' | 'board') || 'list'
+  const setActiveView = (view: 'list' | 'board') => {
+    setSearchParams(prev => {
+      if (view === 'list') {
+        prev.delete('view')
+      } else {
+        prev.set('view', view)
+      }
+      return prev
+    }, { replace: true })
+  }
   const cachedRangesRef = useRef<Map<string, HistoryItem[]>>(new Map())
   const getAllCachedItemsRef = useRef<HistoryItem[]>([])
   const { addNotification } = useNotifications()
@@ -964,7 +977,7 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6">
+    <div className={cn("mx-auto px-4 sm:px-6", activeView === 'board' ? "max-w-7xl" : "max-w-4xl")}>
       <div className="mb-8 text-center">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Resume History</h1>
         <p className="text-slate-600 dark:text-slate-400">View and download your previously tailored resumes</p>
@@ -1079,6 +1092,45 @@ export function HistoryPage() {
         </div>
       )}
 
+      {/* View Toggle Tabs */}
+      {!isLoading && getAllCachedItems.length > 0 && (
+        <div className="mb-4 flex gap-1 border-b border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setActiveView('list')}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+              activeView === 'list'
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+            )}
+          >
+            <List className="h-4 w-4" />
+            List
+          </button>
+          <button
+            onClick={() => setActiveView('board')}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+              activeView === 'board'
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+            )}
+          >
+            <Columns3 className="h-4 w-4" />
+            Board
+          </button>
+        </div>
+      )}
+
+      {activeView === 'board' ? (
+        <KanbanBoard
+          items={filteredItems}
+          onStatusChange={handleStatusChange}
+          onOpenDetailModal={handleOpenDetailModal}
+          onToggleFavorite={handleToggleFavorite}
+          isLoading={isLoading}
+        />
+      ) : (
       <div className="space-y-4">
         {isLoading ? (
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border dark:border-slate-700 p-12 text-center">
@@ -1371,6 +1423,7 @@ export function HistoryPage() {
           </>
         )}
       </div>
+      )}
 
       <ConfirmationDialog
         open={deleteDialogOpen}

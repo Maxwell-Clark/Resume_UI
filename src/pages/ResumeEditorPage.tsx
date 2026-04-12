@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { resumeService } from '@/services/resume'
@@ -37,7 +37,7 @@ export function ResumeEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { addNotification } = useNotifications()
-  const { selectedTemplateId: globalTemplateId } = useTemplate()
+  const { selectedTemplateId: globalTemplateId, primaryColor, secondaryColor, setSelectedTemplateId } = useTemplate()
   const [resume, setResume] = useState<Resume | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -48,11 +48,22 @@ export function ResumeEditorPage() {
   const selectedTemplateId = resumeTemplateId
   const templateHints = getTemplateHints(selectedTemplateId)
 
+  // Sync both local and global state when user changes template
+  const handleTemplateChange = useCallback((id: string) => {
+    setResumeTemplateId(id)
+    setSelectedTemplateId(id)
+  }, [setSelectedTemplateId])
+
+  // Refs for debounced auto-regeneration
+  const regeneratingRef = useRef(false)
+  const regenerateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Resume name and history state
   const [resumeName, setResumeName] = useState('')
   const [isEditingName, setIsEditingName] = useState(false)
   const [editingNameValue, setEditingNameValue] = useState('')
   const [historyItem, setHistoryItem] = useState<HistoryItem | null>(null)
+  const [pdfVersion, setPdfVersion] = useState(0)
 
   // Custom hooks
   const content = useResumeContent()
@@ -123,6 +134,7 @@ export function ResumeEditorPage() {
       const storedTemplate = meta?.template as string | undefined
       if (storedTemplate) {
         setResumeTemplateId(storedTemplate)
+        setSelectedTemplateId(storedTemplate)
       } else {
         setResumeTemplateId(globalTemplateId)
       }
@@ -136,8 +148,71 @@ export function ResumeEditorPage() {
     }
   }
 
+  // Auto-regenerate PDF when template or colors change (debounced)
+  const regeneratePdf = useCallback(async (
+    templateId: string,
+    primary: string,
+    secondary: string
+  ) => {
+    if (!id || !resume || regeneratingRef.current || saving) return
+
+    regeneratingRef.current = true
+    try {
+      const currentContent = content.buildResumeContent() as ResumeContent & Record<string, unknown>
+      currentContent.meta = { ...(currentContent.meta as Record<string, unknown> ?? {}), template: templateId }
+
+      const convertResult = await resumeService.convertResumeToPdf(
+        currentContent,
+        resumeName,
+        templateId,
+        primary,
+        secondary
+      )
+
+      const currentHistoryItem = historyItem || await getHistoryItemByResumeId(id)
+      if (currentHistoryItem) {
+        const newDownloadUrl = convertResult.storage.public_url || convertResult.storage.url
+        const updatedHistoryItem = await updateHistoryItem(currentHistoryItem.id, {
+          download_url: newDownloadUrl,
+        })
+        setHistoryItem(updatedHistoryItem)
+        setPdfVersion(v => v + 1)
+      }
+    } catch (err) {
+      console.error('Auto-regenerate PDF failed:', err)
+    } finally {
+      regeneratingRef.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, resume, saving, resumeName, historyItem])
+
+  useEffect(() => {
+    if (loading || !resume || !id) return
+
+    if (regenerateTimerRef.current) {
+      clearTimeout(regenerateTimerRef.current)
+    }
+
+    regenerateTimerRef.current = setTimeout(() => {
+      regeneratePdf(selectedTemplateId, primaryColor, secondaryColor)
+    }, 800)
+
+    return () => {
+      if (regenerateTimerRef.current) {
+        clearTimeout(regenerateTimerRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTemplateId, primaryColor, secondaryColor])
+
   const handleSave = async () => {
     if (!id || !resume) return
+
+    // Cancel any pending auto-regeneration
+    if (regenerateTimerRef.current) {
+      clearTimeout(regenerateTimerRef.current)
+      regenerateTimerRef.current = null
+    }
 
     try {
       setSaving(true)
@@ -157,7 +232,9 @@ export function ResumeEditorPage() {
         const convertResult = await resumeService.convertResumeToPdf(
           updatedContent,
           resumeName,
-          selectedTemplateId
+          selectedTemplateId,
+          primaryColor,
+          secondaryColor
         )
 
         if (currentHistoryItem) {
@@ -167,6 +244,7 @@ export function ResumeEditorPage() {
             file_name: resumeName
           })
           setHistoryItem(updatedHistoryItem)
+          setPdfVersion(v => v + 1)
 
           addNotification({
             title: 'Resume Updated',
@@ -268,11 +346,15 @@ export function ResumeEditorPage() {
         }}
         downloadUrl={historyItem?.download_url}
         onPreview={() => aiEdit.setPreviewOpen(true)}
-        onDownload={() => window.open(historyItem?.download_url, '_blank')}
+        onDownload={() => {
+          if (!historyItem?.download_url) return
+          const url = `${historyItem.download_url}${historyItem.download_url.includes('?') ? '&' : '?'}v=${pdfVersion}`
+          window.open(url, '_blank')
+        }}
         onSave={handleSave}
         saving={saving}
         selectedTemplateId={selectedTemplateId}
-        onTemplateChange={setResumeTemplateId}
+        onTemplateChange={handleTemplateChange}
       />
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -460,7 +542,8 @@ export function ResumeEditorPage() {
         <div className="h-[calc(90vh-100px)] w-full">
           {historyItem?.download_url ? (
             <iframe
-              src={historyItem.download_url}
+              key={pdfVersion}
+              src={`${historyItem.download_url}${historyItem.download_url.includes('?') ? '&' : '?'}v=${pdfVersion}`}
               className="w-full h-full border-0 rounded"
               title="Resume PDF Preview"
             />

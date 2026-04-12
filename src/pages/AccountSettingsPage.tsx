@@ -232,7 +232,7 @@ export function AccountSettingsPage() {
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">Current Plan</p>
                   <p className="text-xl font-semibold text-slate-900 dark:text-slate-100 capitalize">
-                    {billingStatus.plan_name}
+                    {billingStatus.entitlements?.plan_name ?? billingStatus.plan_name}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(billingStatus.status)}`}>
@@ -345,7 +345,7 @@ export function AccountSettingsPage() {
                     View Plans
                   </Button>
                 )}
-                {billingStatus.plan_name !== 'premium' && billingStatus.has_subscription && (
+                {(billingStatus.entitlements?.plan_name ?? billingStatus.plan_name) !== 'premium' && billingStatus.has_subscription && (
                   <Button variant="outline" onClick={() => navigate('/pricing')}>
                     Upgrade Plan
                   </Button>
