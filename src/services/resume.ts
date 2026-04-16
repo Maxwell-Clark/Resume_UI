@@ -108,6 +108,7 @@ export interface TailorResponse {
   storage: StorageInfo
   format: string
   note?: string
+  page_count?: number
 }
 
 export interface GuaranteedTailorResponse {
@@ -119,6 +120,7 @@ export interface GuaranteedTailorResponse {
   attempts: number
   verification_passed: boolean
   warnings: string[]
+  page_count?: number
 }
 
 export interface TailorOptions {

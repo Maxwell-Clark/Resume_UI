@@ -539,7 +539,12 @@ export function ResumeEditorPage() {
         title="Resume Preview"
         className="max-w-5xl w-full h-[90vh]"
       >
-        <div className="h-[calc(90vh-100px)] w-full">
+        <div className="relative h-[calc(90vh-100px)] w-full">
+          {historyItem?.page_count && historyItem.page_count > 1 ? (
+            <span className="absolute top-2 right-2 z-10 rounded bg-slate-900/75 px-2 py-0.5 text-xs font-medium text-white shadow">
+              {historyItem.page_count} pages
+            </span>
+          ) : null}
           {historyItem?.download_url ? (
             <iframe
               key={pdfVersion}

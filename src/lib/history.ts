@@ -75,6 +75,7 @@ export interface HistoryItem {
   contact_email?: string
   source?: string
   priority?: PriorityType
+  page_count?: number
 }
 
 export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at'>): Promise<HistoryItem> {
@@ -136,6 +137,7 @@ export async function saveHistoryItem(item: Omit<HistoryItem, 'id' | 'created_at
       contact_email: data.contact_email,
       source: data.source,
       priority: data.priority,
+      page_count: data.page_count,
     }
   } catch (error) {
     console.error('Error saving history to Supabase:', error)
@@ -173,6 +175,7 @@ export async function getHistoryItems(offset: number = 0, limit: number = 50): P
       contact_email: item.contact_email,
       source: item.source,
       priority: item.priority,
+      page_count: item.page_count,
     }))
   } catch (error) {
     console.error('Error fetching history from Supabase:', error)
@@ -212,6 +215,7 @@ export async function getHistoryItemById(id: string): Promise<HistoryItem | null
       contact_email: item.contact_email,
       source: item.source,
       priority: item.priority,
+      page_count: item.page_count,
     }
   } catch (error) {
     console.error('Error fetching history item:', error)
@@ -251,6 +255,7 @@ export async function getHistoryItemByResumeId(resume_id: string): Promise<Histo
       contact_email: item.contact_email,
       source: item.source,
       priority: item.priority,
+      page_count: item.page_count,
     }
   } catch (error) {
     console.error('Error fetching history item by resume_id:', error)
@@ -297,6 +302,7 @@ export async function updateHistoryItem(
       contact_email: item.contact_email,
       source: item.source,
       priority: item.priority,
+      page_count: item.page_count,
     }
   } catch (error) {
     console.error('Error updating history item:', error)

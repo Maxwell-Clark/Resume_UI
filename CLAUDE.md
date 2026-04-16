@@ -1,10 +1,10 @@
 # Resume UI
 
-AI-powered resume tailoring SaaS frontend. Users upload resumes, paste job descriptions, get AI-tailored resumes with match scoring, and export to PDF. Connects to the AiResume FastAPI backend at `VITE_API_BASE_URL`.
+AI-powered resume tailoring SaaS frontend. Users upload resumes, paste job descriptions, get AI-tailored resumes with match scoring, and export to PDF.
 
 ## Backend
 
-The backend for this project lives at `../AiResume` (FastAPI). Reference it for API contracts, endpoint definitions, and data models.
+The backend lives at `../resume` (FastAPI). Reference it for API contracts, endpoint definitions, and data models. It has its own `CLAUDE.md`.
 
 ## Tech Stack
 
@@ -33,14 +33,73 @@ npm run test:coverage  # Vitest with v8 coverage
 src/
   components/        # App components (named exports, function declarations)
   components/ui/     # shadcn/ui primitives — DO NOT manually edit, use shadcn CLI
-  contexts/          # React Context providers (Auth, Subscription, Stripe, Tour, Theme, Notification, AuthModal)
+  contexts/          # React Context providers (Auth, Subscription, Stripe, Tour, Theme, Notification, AuthModal, Template)
   hooks/             # Custom hooks (useIsMobile, useJobStatusPolling, useTour)
   lib/               # Utilities — auth.ts (authenticatedFetch), supabase.ts, analytics.ts, utils.ts (cn helper)
-  pages/             # Route-level page components
+  pages/             # Route-level page components (lazy-loaded)
   services/          # API modules (resume.ts, billing.ts)
   types/             # TypeScript type definitions
   test/              # Test setup (setup.ts with jsdom mocks)
 ```
+
+## Routes
+
+```
+/                       → LandingPage (unauth) or redirect to /studio (auth)
+/login, /signup         → Redirect to / with auth modal
+/auth/callback          → Supabase auth callback
+/features, /pricing, /faq, /about, /contact → Public pages
+
+Protected:
+/studio                 → ResumeStudioPage (main app)
+/editor, /editor/:id    → ResumeEditorPage
+/templates              → TemplatesPage
+/history                → HistoryPage
+/account                → AccountSettingsPage
+```
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `VITE_API_BASE_URL` | Backend API endpoint | `http://localhost:8000` |
+| `VITE_SUPABASE_URL` | Supabase project URL | required |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key | required |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | Stripe public key | optional |
+| `VITE_STRIPE_PRICE_BASIC` | Basic plan price ID | optional |
+| `VITE_STRIPE_PRICE_PREMIUM` | Premium plan price ID | optional |
+| `VITE_PUBLIC_POSTHOG_KEY` | PostHog analytics key | optional |
+| `VITE_PUBLIC_POSTHOG_HOST` | PostHog API host | optional |
+
+## API Calls to Backend
+
+All calls go through `authenticatedFetch()` (`src/lib/auth.ts`) which attaches the Bearer token from Supabase session and prefixes `VITE_API_BASE_URL`.
+
+### Resume Service (`src/services/resume.ts`)
+- `POST /resumes` — Create resume
+- `GET /resumes?limit=50` — List resumes
+- `GET /resumes/{id}` — Get resume
+- `PATCH /resumes/{id}` — Update resume
+- `DELETE /resumes/{id}` — Delete resume
+- `POST /convert?format=pdf&store=true&template={id}&primary_color={c}&secondary_color={c}` — PDF export
+- `POST /edit-text` — AI text editing `{text, instruction}`
+- `POST /parse/job` — Parse job description (FormData: `url` or `text`)
+- `POST /match/enhanced` — Resume-job matching `{resume_jsonresume, job_json}`
+- `POST /tailor?format=pdf&store=true&guaranteed=true&max_retries={n}` — Tailor resume
+
+### Billing Service (`src/services/billing.ts`)
+- `GET /billing/status` — Billing status & entitlements
+- `POST /billing/checkout-session` — Stripe checkout `{price_id, promo_code, success_url, cancel_url}`
+- `POST /billing/portal-session` — Customer portal `{return_url}`
+- `POST /billing/create-subscription` — Create subscription `{price_id, promo_code}`
+- `GET /billing/validate-promo?code={code}` — Validate promo code
+- `POST /billing/embedded-checkout-session` — Embedded checkout `{price_id, promo_code, return_url}`
+
+## Dev Workflow
+
+1. Start backend: `cd ../resume && python run.py` (port 8000)
+2. Start frontend: `npm run dev` (Vite, port 5173)
+3. Pre-commit hook (Husky): runs lint + test + coverage — blocks commit on failure
 
 ## Conventions
 
