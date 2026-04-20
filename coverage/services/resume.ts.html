@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">64.19% </span>
+                <span class="strong">61.17% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>52/81</span>
+                <span class='fraction'>52/85</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">46.15% </span>
+                <span class="strong">41.86% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>18/39</span>
+                <span class='fraction'>18/43</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">61.33% </span>
+                <span class="strong">58.22% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>46/75</span>
+                <span class='fraction'>46/79</span>
             </div>
         
             
@@ -543,7 +543,19 @@
 <a name='L478'></a><a href='#L478'>478</a>
 <a name='L479'></a><a href='#L479'>479</a>
 <a name='L480'></a><a href='#L480'>480</a>
-<a name='L481'></a><a href='#L481'>481</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -738,8 +750,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -862,6 +874,14 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1133,6 +1153,7 @@ export interface TailorResponse {
   storage: StorageInfo
   format: string
   note?: string
+  page_count?: number
 }
 &nbsp;
 export interface GuaranteedTailorResponse {
@@ -1144,6 +1165,7 @@ export interface GuaranteedTailorResponse {
   attempts: number
   verification_passed: boolean
   warnings: string[]
+  page_count?: number
 }
 &nbsp;
 export interface TailorOptions {
@@ -1337,7 +1359,7 @@ export const resumeService = {
   /**
    * Convert resume content to PDF
    */
-  async <span class="fstat-no" title="function not covered" >convertResumeToPdf(c</span>ontent: Record&lt;string, unknown&gt;, filename?: string, templateId?: string): Promise&lt;{ storage: { public_url: string; url: string; signed_url?: string }; format: string }&gt; {
+  async <span class="fstat-no" title="function not covered" >convertResumeToPdf(c</span>ontent: Record&lt;string, unknown&gt;, filename?: string, templateId?: string, primaryColor?: string, secondaryColor?: string): Promise&lt;{ storage: { public_url: string; url: string; signed_url?: string }; format: string }&gt; {
     const params = <span class="cstat-no" title="statement not covered" >new URLSearchParams({</span>
       format: 'pdf',
       store: 'true',
@@ -1350,6 +1372,14 @@ export const resumeService = {
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    if (templateId) {</span>
 <span class="cstat-no" title="statement not covered" >      params.append('template', templateId)</span>
+    }
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    if (primaryColor) {</span>
+<span class="cstat-no" title="statement not covered" >      params.append('primary_color', primaryColor)</span>
+    }
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    if (secondaryColor) {</span>
+<span class="cstat-no" title="statement not covered" >      params.append('secondary_color', secondaryColor)</span>
     }
 &nbsp;
     const response = <span class="cstat-no" title="statement not covered" >await authenticatedFetch(`/convert?${params.toString()}`, {</span>
@@ -1510,7 +1540,7 @@ export const resumeService = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-29T15:43:46.374Z
+                at 2026-04-16T17:17:01.097Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -4,6 +4,7 @@ vi.mock('./supabase', () => ({
   supabase: {
     auth: {
       getSession: vi.fn(),
+      refreshSession: vi.fn(),
     },
   },
 }))
@@ -13,24 +14,30 @@ import { supabase } from './supabase'
 import { getAccessToken, authenticatedFetch, handleApiResponse } from './auth'
 
 const mockGetSession = supabase.auth.getSession as ReturnType<typeof vi.fn>
+const mockRefreshSession = supabase.auth.refreshSession as ReturnType<typeof vi.fn>
 
 // Mock global fetch
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
+
+const farFutureExpiry = () => Math.floor(Date.now() / 1000) + 3600 // 1h from now
+const nearExpiry = () => Math.floor(Date.now() / 1000) + 10 // 10s from now
+const pastExpiry = () => Math.floor(Date.now() / 1000) - 10 // 10s ago
 
 describe('getAccessToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('returns access token when session exists', async () => {
+  it('returns access token when session is fresh', async () => {
     mockGetSession.mockResolvedValue({
-      data: { session: { access_token: 'test-token-123' } },
+      data: { session: { access_token: 'test-token-123', expires_at: farFutureExpiry() } },
     })
 
     const token = await getAccessToken()
     expect(token).toBe('test-token-123')
     expect(mockGetSession).toHaveBeenCalledOnce()
+    expect(mockRefreshSession).not.toHaveBeenCalled()
   })
 
   it('returns null when session is null', async () => {
@@ -40,6 +47,49 @@ describe('getAccessToken', () => {
 
     const token = await getAccessToken()
     expect(token).toBeNull()
+    expect(mockRefreshSession).not.toHaveBeenCalled()
+  })
+
+  it('refreshes when session is near expiry and returns new token', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'stale-token', expires_at: nearExpiry() } },
+    })
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { access_token: 'fresh-token', expires_at: farFutureExpiry() } },
+      error: null,
+    })
+
+    const token = await getAccessToken()
+    expect(token).toBe('fresh-token')
+    expect(mockRefreshSession).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes when session has already expired', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'expired-token', expires_at: pastExpiry() } },
+    })
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { access_token: 'brand-new-token', expires_at: farFutureExpiry() } },
+      error: null,
+    })
+
+    const token = await getAccessToken()
+    expect(token).toBe('brand-new-token')
+    expect(mockRefreshSession).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to existing token when refresh fails', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'stale-token', expires_at: nearExpiry() } },
+    })
+    mockRefreshSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error('refresh failed'),
+    })
+
+    const token = await getAccessToken()
+    expect(token).toBe('stale-token')
+    expect(mockRefreshSession).toHaveBeenCalledOnce()
   })
 })
 
@@ -100,6 +150,57 @@ describe('authenticatedFetch', () => {
     const [, options] = mockFetch.mock.calls[0]
     expect(options.method).toBe('POST')
     expect(options.body).toBe('{"key":"value"}')
+  })
+
+  it('does not refresh when first fetch returns 200', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok', expires_at: farFutureExpiry() } },
+    })
+    mockFetch.mockResolvedValue(new Response('ok', { status: 200 }))
+
+    await authenticatedFetch('/endpoint')
+
+    expect(mockFetch).toHaveBeenCalledOnce()
+    expect(mockRefreshSession).not.toHaveBeenCalled()
+  })
+
+  it('refreshes and retries once on 401', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'stale-tok', expires_at: farFutureExpiry() } },
+    })
+    mockFetch
+      .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }))
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { access_token: 'fresh-tok', expires_at: farFutureExpiry() } },
+      error: null,
+    })
+
+    const response = await authenticatedFetch('/endpoint')
+
+    expect(response.status).toBe(200)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockRefreshSession).toHaveBeenCalledOnce()
+    // Second fetch must use the refreshed token
+    const [, secondOptions] = mockFetch.mock.calls[1]
+    expect(secondOptions.headers.get('Authorization')).toBe('Bearer fresh-tok')
+  })
+
+  it('returns original 401 response when refresh also fails', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok', expires_at: farFutureExpiry() } },
+    })
+    mockFetch.mockResolvedValue(new Response('unauthorized', { status: 401 }))
+    mockRefreshSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error('refresh failed'),
+    })
+
+    const response = await authenticatedFetch('/endpoint')
+
+    expect(response.status).toBe(401)
+    expect(mockFetch).toHaveBeenCalledOnce() // no retry because refresh failed
+    expect(mockRefreshSession).toHaveBeenCalledOnce()
   })
 })
 
